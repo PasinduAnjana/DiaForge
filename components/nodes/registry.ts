@@ -153,7 +153,6 @@ export const NODE_REGISTRY: NodeDefinition[] = [
     color: 'blue',
     description: 'Relational database cylinder',
     component: createCylinderNode({
-      icon: Database,
       defaultLabel: 'Database',
       color: 'blue',
     }),

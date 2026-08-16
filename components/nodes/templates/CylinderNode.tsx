@@ -6,11 +6,9 @@ import { LucideIcon, Database } from 'lucide-react';
 import { DiaFlowNodeData } from '../types';
 
 export const createCylinderNode = ({
-  icon: DefaultIcon = Database,
   defaultLabel = 'Database',
   color = 'blue',
 }: {
-  icon?: LucideIcon | React.ComponentType<{ size?: number; className?: string }>;
   defaultLabel?: string;
   color?: NodeColorTheme;
 }) => {
@@ -51,7 +49,6 @@ export const createCylinderNode = ({
             className={`absolute left-0 w-full z-10 flex flex-col items-center justify-center transition-colors border-x-2 bg-white dark:bg-zinc-900 ${borderColor}`}
             style={{ top: '20px', bottom: '20px' }}
           >
-            <DefaultIcon size={18} className="text-blue-500 dark:text-blue-400 mt-3 mb-1 shrink-0" />
             <div className="w-full px-2 flex justify-center">
               <EditableLabel
                 id={id}
@@ -59,8 +56,8 @@ export const createCylinderNode = ({
                 defaultLabel={defaultLabel}
                 isEditing={isEditing}
                 setIsEditing={setIsEditing}
-                className="text-zinc-800 dark:text-zinc-100 text-center w-full"
-                inputClassName="w-full font-medium"
+                className="text-zinc-800 dark:text-zinc-100 text-center w-full font-medium"
+                inputClassName="w-full font-medium text-center"
               />
             </div>
           </div>
