@@ -13,15 +13,48 @@ export const NodeColorThemeSchema = z.enum([
   'zinc',
 ]);
 
+const COLOR_MAP: Record<string, z.infer<typeof NodeColorThemeSchema>> = {
+  red: 'rose',
+  pink: 'rose',
+  rose: 'rose',
+  yellow: 'amber',
+  orange: 'amber',
+  amber: 'amber',
+  violet: 'purple',
+  purple: 'purple',
+  indigo: 'indigo',
+  blue: 'blue',
+  sky: 'cyan',
+  teal: 'cyan',
+  cyan: 'cyan',
+  green: 'green',
+  emerald: 'emerald',
+  gray: 'zinc',
+  grey: 'zinc',
+  slate: 'zinc',
+  neutral: 'zinc',
+  zinc: 'zinc',
+  black: 'zinc',
+  white: 'zinc',
+};
+
+export const SafeNodeColorSchema = z.preprocess((val) => {
+  if (typeof val !== 'string') return 'indigo';
+  const clean = val.toLowerCase().trim();
+  return COLOR_MAP[clean] || 'indigo';
+}, NodeColorThemeSchema);
+
 export const NodeDataSchema = z
   .object({
     label: z.string().optional(),
     sublabel: z.string().optional(),
-    color: NodeColorThemeSchema.optional(),
+    color: SafeNodeColorSchema.optional().default('indigo'),
     iconName: z.string().optional(),
     width: z.number().optional(),
     height: z.number().optional(),
     orientation: z.enum(['horizontal', 'vertical']).optional(),
+    tier: z.number().min(0).max(4).optional(),
+    group: z.string().optional(),
   })
   .passthrough();
 
@@ -33,12 +66,13 @@ export const DiaFlowNodeSchema = z
       x: z.number(),
       y: z.number(),
     }),
-    data: NodeDataSchema.default({}),
+    data: NodeDataSchema.default({ color: 'indigo' }),
     width: z.number().optional(),
     height: z.number().optional(),
     selected: z.boolean().optional(),
     draggable: z.boolean().optional(),
     selectable: z.boolean().optional(),
+    zIndex: z.number().optional(),
   })
   .passthrough();
 
@@ -78,8 +112,10 @@ export const AIGeneratedNodeSchema = z.object({
   type: z.string(),
   label: z.string(),
   sublabel: z.string().optional(),
-  color: NodeColorThemeSchema.optional(),
+  color: SafeNodeColorSchema.optional().default('indigo'),
   iconName: z.string().optional(),
+  tier: z.number().min(0).max(4).optional().describe('0=Clients, 1=Ingress/Edge, 2=App Services, 3=Data & Queues, 4=External'),
+  group: z.string().optional().describe('Optional VPC or container boundary name'),
 });
 
 export const AIGeneratedEdgeSchema = z.object({
@@ -97,7 +133,7 @@ export const AIGeneratedDiagramSchema = z.object({
   edges: z.array(AIGeneratedEdgeSchema).default([]),
 });
 
-export const AIProviderSchema = z.enum(['grok', 'groq', 'openai']);
+export const AIProviderSchema = z.enum(['groq', 'grok', 'openai']);
 
 export const AIClientConfigSchema = z.object({
   provider: AIProviderSchema.optional(),

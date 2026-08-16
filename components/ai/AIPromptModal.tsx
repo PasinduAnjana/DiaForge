@@ -182,17 +182,28 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
             sublabel: n.sublabel,
             color: n.color || 'indigo',
             iconName: normalized.iconName,
+            tier: typeof n.tier === 'number' ? n.tier : undefined,
+            group: n.group,
           },
         };
       });
 
+      // High-signal keywords permitted as labels (discard obvious HTTP/REST/SQL/calls/reads/writes)
+      const ALLOWED_LABEL_PATTERNS = /^(grpc|websocket|ws|pub\/sub|pubsub|webhook|cdc|sse|event|kafka|stream)$/i;
+      let labeledCount = 0;
+      const MAX_LABELED_EDGES = Math.max(1, Math.floor((data.edges || []).length * 0.2));
+
       const rawEdges: Edge[] = (data.edges || []).map((e: any) => {
         let label = (e.label || '').trim();
-        // Discard long sentences, keep only crisp short protocols/labels (1-3 words)
-        if (label.length > 20) {
-          const words = label.split(/\s+/);
-          label = words.slice(0, 2).join(' ');
+
+        // Discard redundant or filler labels (HTTP, HTTPS, REST, API, read, write, query, call, data, etc.)
+        const isHighSignal = ALLOWED_LABEL_PATTERNS.test(label);
+        if (!isHighSignal || labeledCount >= MAX_LABELED_EDGES) {
+          label = '';
+        } else {
+          labeledCount++;
         }
+
         return {
           id: e.id || `e_${e.source}_${e.target}`,
           source: e.source,

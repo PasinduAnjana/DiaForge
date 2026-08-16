@@ -145,7 +145,7 @@ export const BaseNode = ({
     updateNodeInternals(id);
   }, [id, updateNodeInternals]);
 
-  const handleClass = `!w-2.5 !h-2.5 ${theme.handleBg} !border-2 !border-white dark:!border-zinc-900 z-40 rounded-full`;
+  const handleClass = `!w-3 !h-3 ${theme.handleBg} !border-2 !border-white dark:!border-zinc-900 z-40 rounded-full hover:scale-125 transition-transform cursor-crosshair`;
 
   return (
     <>
@@ -175,57 +175,33 @@ export const BaseNode = ({
           <>
             {/* Top Handle */}
             <Handle
-              type="target"
-              position={Position.Top}
-              id="top-target"
-              className={handleClass}
-            />
-            <Handle
               type="source"
               position={Position.Top}
-              id="top-source"
+              id="top"
               className={handleClass}
             />
 
             {/* Right Handle */}
             <Handle
-              type="target"
-              position={Position.Right}
-              id="right-target"
-              className={handleClass}
-            />
-            <Handle
               type="source"
               position={Position.Right}
-              id="right-source"
+              id="right"
               className={handleClass}
             />
 
             {/* Bottom Handle */}
             <Handle
-              type="target"
-              position={Position.Bottom}
-              id="bottom-target"
-              className={handleClass}
-            />
-            <Handle
               type="source"
               position={Position.Bottom}
-              id="bottom-source"
+              id="bottom"
               className={handleClass}
             />
 
             {/* Left Handle */}
             <Handle
-              type="target"
-              position={Position.Left}
-              id="left-target"
-              className={handleClass}
-            />
-            <Handle
               type="source"
               position={Position.Left}
-              id="left-source"
+              id="left"
               className={handleClass}
             />
           </>

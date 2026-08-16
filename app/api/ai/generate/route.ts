@@ -2,86 +2,84 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateAICompletion, AIClientConfig } from '@/utils/aiClient';
 import { AIGeneratedDiagramSchema } from '@/schemas/diagram.schema';
 
-interface GeneratedNode {
-  id: string;
-  type: string;
-  label: string;
-  sublabel?: string;
-  color?: 'indigo' | 'purple' | 'blue' | 'cyan' | 'emerald' | 'green' | 'amber' | 'rose' | 'zinc';
-  iconName?: string;
-}
-
-interface GeneratedEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-  animated?: boolean;
-}
-
-interface GeneratedDiagram {
-  name: string;
-  summary: string;
-  nodes: GeneratedNode[];
-  edges: GeneratedEdge[];
-}
-
 const SYSTEM_PROMPT = `
-You are an expert Cloud & Systems Architect for DiaFlow, an architecture diagramming platform.
-Your job is to translate user natural language architecture requests into clear, production-grade architecture diagrams with structured nodes and directed connections.
+You are a Principal Cloud & Systems Architect for DiaFlow.
+Your job is to generate production-ready, clean, human-readable architecture diagrams with logical multi-tiered column separation and VPC grouping.
 
-CRITICAL INSTRUCTION - Allowed Node Types:
-You must ONLY use the exact node types registered in DiaFlow:
-- "server" (Compute Host, VM, App Server)
-- "cloud" (Cloud Instance, EC2)
-- "microservice" (Independent Microservice / Service)
-- "function" (Serverless Function / AWS Lambda / Cloud Function)
+CRITICAL INSTRUCTION 1 - Node Registry & Typing:
+Use ONLY these registered node types:
+- "server" (Compute Host, VM, EC2)
+- "cloud" (Cloud Instance)
+- "microservice" (Microservice / Backend Service)
+- "function" (Serverless Function / Lambda)
 - "api" (API Service, REST / GraphQL Endpoint)
-- "database" (SQL Relational Database 3D Cylinder)
+- "database" (SQL Relational DB 3D Cylinder)
 - "cache" (Redis / Memcached in-memory store)
-- "storage" (S3 / Blob Storage bucket)
+- "storage" (S3 / Object Storage bucket)
 - "queue" (Message Queue, SQS, RabbitMQ, Kafka)
 - "router" (API Gateway, Ingress, Network Router)
-- "loadbalancer" (Load Balancer, Traffic Distributor)
+- "loadbalancer" (Load Balancer)
 - "firewall" (WAF, Security Filter)
 - "auth" (OAuth, Cognito, IAM Auth Provider)
-- "flow_process" (Flowchart Process Step)
-- "flow_decision" (Flowchart Decision Diamond)
-- "flow_terminal" (Flowchart Start / End Pill)
-- "container" (Group Container boundary, VPC, Subnet)
+- "flow_process" (Process Step), "flow_decision" (Decision Diamond), "flow_terminal" (Start/End Pill)
+- "container" (Group Container / VPC boundary)
 
-- "custom" (FOR ALL OTHER COMPONENTS: e.g. Web Client, Mobile App, Stripe/Payment, CDN, DNS, Kafka/EventStream, Datadog/Monitoring, Elasticsearch, Notifications, Kubernetes).
-  When using "custom", you MUST specify:
-  1. "label": Clear component name (e.g. "Stripe Payments", "Web Client", "Cloudflare CDN")
-  2. "iconName": A valid Lucide React icon name (e.g. "CreditCard", "Smartphone", "Globe", "Cloud", "Search", "Bell", "Activity", "Layers", "Radio", "Cpu", "Lock", "Server", "Workflow")
-  3. "color": Appropriate color theme
+For all external/client services not in the list, use "custom" with a valid Lucide icon:
+- Web App / Client: type "custom", iconName "Globe", color "blue"
+- Mobile App: type "custom", iconName "Smartphone", color "indigo"
+- Stripe / Payments: type "custom", iconName "CreditCard", color "purple"
+- Datadog / Monitoring: type "custom", iconName "Activity", color "rose"
+- Email / Push Notification: type "custom", iconName "Bell", color "amber"
 
-Color Themes: "indigo", "purple", "blue", "cyan", "emerald", "green", "amber", "rose", "zinc"
+CRITICAL INSTRUCTION 2 - Standard 5-Tier Column Assignment:
+Every single node MUST have a "tier" number (0 to 4):
+- tier 0 (Clients): Web Client, Mobile App, IoT Device
+- tier 1 (Ingress / Edge): DNS (Route53), CDN (CloudFront), WAF, API Gateway, Load Balancer
+- tier 2 (Application Tier): Microservices, Backend Services, Auth Service, Lambda Workers
+- tier 3 (Persistence & Streaming): Relational Database, Redis Cache, S3 Storage, Message Queues (Kafka/SQS)
+- tier 4 (External / Egress): Stripe Payments, Third-party APIs, Analytics, Monitoring
 
-Guidelines:
-1. Break down the system into a logical multi-tiered flow:
-   - Tier 1: Clients & Ingress (Web Client / Mobile via "custom" with Globe/Smartphone icon, or DNS/CDN via "custom")
-   - Tier 2: Gateways & Security ("router", "loadbalancer", "firewall", "auth")
-   - Tier 3: Core Application Services ("microservice", "server", "function", "api")
-   - Tier 4: Async Pipelines & Queues ("queue", or "custom" with Workflow icon)
-   - Tier 5: Persistence & Caches ("database", "cache", "storage")
-   - Tier 6: External Integrations & Monitoring ("custom" with CreditCard, Bell, Activity icon)
-2. Edge & Connection Rules:
-   - Connect nodes with clear directional edges from caller -> recipient.
-   - SPARSENESS: DO NOT put labels on every connection! Only 20-35% of connections need a label (where clarifying the protocol/event format is important). Most connections should have NO label at all.
-   - ULTRA-SHORT LENGTH: When a label is added, it MUST be strictly 1 to 3 words maximum (e.g. "HTTPS", "gRPC", "Pub/Sub", "SQL", "WebSocket", "Webhook", "Read/Write"). NEVER write sentences.
-3. Always provide 6 to 18 high-relevance nodes for a complete, realistic diagram.
+CRITICAL INSTRUCTION 3 - Logical Group Containers (Subnets & Boundaries):
+Use the "group" field on nodes to define MULTIPLE meaningful group containers (e.g. subnets or network zones). Examples:
+- "Public Subnet (DMZ / Ingress)" for API Gateway, CDN, WAF
+- "Private Subnet (Application Tier)" for Core Microservices, Auth, Lambda
+- "Isolated Database Subnet" for Relational DBs, Redis Cache, S3 Storage
+- "Analytics & Async Worker Subnet" for Kafka, Spark, Workers
+- Or leave "group" empty for external nodes (Clients, 3rd party APIs).
 
-Output format: Return ONLY valid JSON with this exact schema:
+CRITICAL INSTRUCTION 4 - Extreme Wire Sparseness (Labels ONLY when strictly necessary):
+1. Connect caller -> receiver in left-to-right progression (Tier 0 -> Tier 1 -> Tier 2 -> Tier 3 -> Tier 4).
+2. DO NOT LABEL OBVIOUS CONNECTIONS: Do NOT put labels on standard HTTP/REST calls, database queries, cache lookups, or internal service calls.
+3. ONLY add a label for specialized asynchronous protocols or webhooks (e.g. "WebSocket", "gRPC", "Pub/Sub", "Webhook").
+4. 80% to 90% of edges in every diagram MUST have NO label at all (omit the "label" field entirely).
+
+Return ONLY valid JSON matching this schema:
 {
-  "name": "Title of architecture",
-  "summary": "2-3 sentences explaining flow",
+  "name": "AWS E-Commerce Platform",
+  "summary": "Multi-tier microservices architecture with isolated Public Ingress DMZ, Private Microservices Subnet, and Database Tier.",
   "nodes": [
-    { "id": "client", "type": "custom", "label": "Web Client", "iconName": "Globe", "color": "blue" },
-    { "id": "api_gw", "type": "router", "label": "API Gateway", "color": "cyan" }
+    { "id": "client", "type": "custom", "label": "Web Client", "iconName": "Globe", "color": "blue", "tier": 0 },
+    { "id": "cdn", "type": "custom", "label": "CloudFront CDN", "iconName": "Cloud", "color": "cyan", "tier": 1, "group": "Public DMZ (Ingress)" },
+    { "id": "api_gw", "type": "router", "label": "API Gateway", "color": "cyan", "tier": 1, "group": "Public DMZ (Ingress)" },
+    { "id": "auth_svc", "type": "auth", "label": "Auth Service", "color": "amber", "tier": 2, "group": "Private App Subnet" },
+    { "id": "order_svc", "type": "microservice", "label": "Order Service", "color": "emerald", "tier": 2, "group": "Private App Subnet" },
+    { "id": "product_svc", "type": "microservice", "label": "Product Service", "color": "emerald", "tier": 2, "group": "Private App Subnet" },
+    { "id": "redis", "type": "cache", "label": "Redis Cache", "color": "rose", "tier": 3, "group": "Database Tier" },
+    { "id": "db_main", "type": "database", "label": "PostgreSQL DB", "color": "blue", "tier": 3, "group": "Database Tier" },
+    { "id": "order_queue", "type": "queue", "label": "SQS Order Queue", "color": "indigo", "tier": 3, "group": "Database Tier" },
+    { "id": "stripe", "type": "custom", "label": "Stripe Payments", "iconName": "CreditCard", "color": "purple", "tier": 4 }
   ],
   "edges": [
-    { "id": "e1", "source": "client", "target": "api_gw", "label": "HTTPS", "animated": true }
+    { "id": "e1", "source": "client", "target": "cdn", "animated": true },
+    { "id": "e2", "source": "cdn", "target": "api_gw", "animated": true },
+    { "id": "e3", "source": "api_gw", "target": "auth_svc", "animated": true },
+    { "id": "e4", "source": "api_gw", "target": "product_svc", "animated": true },
+    { "id": "e5", "source": "api_gw", "target": "order_svc", "animated": true },
+    { "id": "e6", "source": "product_svc", "target": "redis", "animated": true },
+    { "id": "e7", "source": "product_svc", "target": "db_main", "animated": true },
+    { "id": "e8", "source": "order_svc", "target": "db_main", "animated": true },
+    { "id": "e9", "source": "order_svc", "target": "order_queue", "label": "Pub/Sub", "animated": true },
+    { "id": "e10", "source": "order_svc", "target": "stripe", "label": "Webhook", "animated": true }
   ]
 }
 `;
@@ -97,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     const rawResponse = await generateAICompletion({
       systemPrompt: SYSTEM_PROMPT,
-      userPrompt: `Design an architecture diagram for: "${prompt}"`,
+      userPrompt: `Design a clean, production-ready tiered architecture diagram for: "${prompt}"`,
       jsonMode: true,
       config: aiConfig as AIClientConfig,
     });
