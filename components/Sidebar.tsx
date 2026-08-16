@@ -202,18 +202,6 @@ export const Sidebar = () => {
           </div>
         )}
       </div>
-
-      {/* Shortcuts Footer */}
-      <div className="p-3.5 border-t border-zinc-200 dark:border-zinc-800/60 text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed bg-zinc-100/50 dark:bg-zinc-900/30 space-y-1 shrink-0">
-        <div className="font-semibold text-zinc-600 dark:text-zinc-300 text-[11px] mb-1">
-          Quick Shortcuts
-        </div>
-        <p>• <strong>4-way ports</strong> on hover to connect</p>
-        <p>• <strong>Double-click</strong> node to edit label</p>
-        <p>• <strong>Delete / Backspace</strong> to remove</p>
-        <p>• <strong>Double-click edge</strong> to delete line</p>
-        <p>• <strong>Ctrl + S</strong> to save .diaflow file</p>
-      </div>
     </aside>
   );
 };

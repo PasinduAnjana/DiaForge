@@ -34,7 +34,8 @@ import {
   Maximize2,
   ZoomIn,
   ZoomOut,
-  X
+  X,
+  HelpCircle
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import {
@@ -60,6 +61,7 @@ const DiagramFlow = () => {
   const [title, setTitle] = useState('Untitled Architecture');
   const [isSaved, setIsSaved] = useState(true);
   const [isPresenting, setIsPresenting] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const { screenToFlowPosition, fitView, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
   const { theme, setTheme } = useTheme();
@@ -168,8 +170,12 @@ const DiagramFlow = () => {
   // 3. Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Toggle / Exit Present Mode on ESC
+      // Toggle / Exit Present Mode or Close Help on ESC
       if (e.key === 'Escape') {
+        if (showHelp) {
+          setShowHelp(false);
+          return;
+        }
         if (isPresenting) {
           exitPresentMode();
           return;
@@ -546,6 +552,73 @@ const DiagramFlow = () => {
               <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />
             )}
           </ReactFlow>
+
+          {/* Floating Help & Shortcuts Widget (Corner of Canvas) */}
+          {!isPresenting && (
+            <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end">
+              {/* Help Popover */}
+              {showHelp && (
+                <div className="mb-2.5 w-72 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-900 dark:text-zinc-100">
+                    <span className="flex items-center gap-1.5 text-xs">
+                      <HelpCircle size={14} className="text-indigo-500" />
+                      Shortcuts & Tips
+                    </span>
+                    <button
+                      onClick={() => setShowHelp(false)}
+                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-[11px] leading-relaxed">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Present Mode</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">P</kbd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Delete Node / Wire</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Del / Backspace</kbd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Save Diagram</span>
+                      <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + S</kbd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Delete Connection</span>
+                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click wire</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Edit Label</span>
+                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click node</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Change Icon & Color</span>
+                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Click node icon</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-600 dark:text-zinc-400">Open Diagram</span>
+                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Drag & drop .diaflow</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Small Help Icon Button */}
+              <button
+                onClick={() => setShowHelp((prev) => !prev)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center border shadow-lg transition-all cursor-pointer ${
+                  showHelp
+                    ? 'bg-indigo-600 border-indigo-500 text-white'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-700'
+                }`}
+                title="Keyboard Shortcuts & Tips"
+              >
+                <HelpCircle size={16} />
+              </button>
+            </div>
+          )}
 
           {/* Floating Presenter Bar */}
           {isPresenting && (
