@@ -35,7 +35,10 @@ import {
   ZoomIn,
   ZoomOut,
   X,
-  HelpCircle
+  HelpCircle,
+  Sparkles,
+  Bot,
+  LayoutGrid
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import {
@@ -45,6 +48,17 @@ import {
   loadDiagramFromStorage,
   clearDiagramStorage,
 } from '@/utils/diagramStorage';
+import { getLayoutedElements } from '@/utils/autoLayout';
+import { AIPromptModal } from './ai/AIPromptModal';
+import { AICopilotDrawer } from './ai/AICopilotDrawer';
+import { AISettingsModal } from './ai/AISettingsModal';
+import { EditableEdge } from './edges/EditableEdge';
+import { AIClientConfig } from '@/utils/aiClient';
+
+const edgeTypes = {
+  default: EditableEdge,
+  smoothstep: EditableEdge,
+};
 
 let id = 0;
 const getId = () => `node_${id++}_${Date.now()}`;
@@ -63,10 +77,49 @@ const DiagramFlow = () => {
   const [isPresenting, setIsPresenting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
+  // AI States
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AIClientConfig>({
+    provider: 'groq',
+    apiKey: '',
+    model: 'llama-3.3-70b-versatile',
+  });
+
   const { screenToFlowPosition, fitView, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Load custom AI configuration on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('diaflow_ai_config');
+      if (stored) {
+        setAiConfig(JSON.parse(stored));
+      }
+    } catch {
+      // Ignore local storage error
+    }
+  }, []);
+
+  const handleSaveAIConfig = (newConfig: AIClientConfig) => {
+    setAiConfig(newConfig);
+    try {
+      localStorage.setItem('diaflow_ai_config', JSON.stringify(newConfig));
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleAutoLayout = useCallback((direction: 'LR' | 'TB' = 'LR') => {
+    if (nodes.length === 0) return;
+    const layouted = getLayoutedElements(nodes, edges, { direction });
+    setNodes(layouted.nodes);
+    setEdges(layouted.edges);
+    setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50);
+  }, [nodes, edges, fitView, setNodes, setEdges]);
 
   const enterPresentMode = useCallback(() => {
     setIsPresenting(true);
@@ -438,242 +491,332 @@ const DiagramFlow = () => {
             </div>
           </div>
           
-          {/* Right: Actions Toolbar */}
-          <div className="flex items-center gap-3">
-            {/* Present Button */}
+        {/* Right: Actions Toolbar */}
+        <div className="flex items-center gap-2.5">
+          {/* AI Generate Button */}
+          <button
+            onClick={() => setIsAIModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-linear-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg transition-all shadow-sm shadow-indigo-600/30 hover:shadow-indigo-600/50 cursor-pointer"
+            title="Generate Architecture with AI (Text-to-Diagram)"
+          >
+            <Sparkles size={13} className="text-amber-300 animate-pulse" />
+            <span>AI Generate</span>
+          </button>
+
+          {/* AI Copilot Drawer Toggle */}
+          <button
+            onClick={() => setIsCopilotOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+              isCopilotOpen
+                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-semibold'
+                : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+            }`}
+            title="AI Architecture Copilot (Chat, Security Audit, Flow Review)"
+          >
+            <Bot size={14} className="text-indigo-500" />
+            <span className="hidden md:inline">Copilot</span>
+          </button>
+
+          {/* Auto Layout Button */}
+          <button
+            onClick={() => handleAutoLayout('LR')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg transition-colors cursor-pointer"
+            title="Auto-Layout into Clean Tiered Hierarchy"
+          >
+            <LayoutGrid size={13} className="text-zinc-500 dark:text-zinc-400" />
+            <span className="hidden lg:inline">Layout</span>
+          </button>
+
+          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 my-auto" />
+
+          {/* Present Button */}
+          <button
+            onClick={enterPresentMode}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm shadow-emerald-600/20 cursor-pointer"
+            title="Present Diagram (P key)"
+          >
+            <Play size={13} className="fill-current" />
+            <span>Present</span>
+          </button>
+
+          {/* File Operations: New, Open, Save */}
+          <div className="flex items-center gap-1 bg-zinc-100/70 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
             <button
-              onClick={enterPresentMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm shadow-emerald-600/20"
-              title="Present Diagram (P key)"
+              onClick={handleNewDiagram}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
+              title="New Diagram"
             >
-              <Play size={13} className="fill-current" />
-              <span>Present</span>
+              <FilePlus size={13} className="text-zinc-500 dark:text-zinc-400" />
+              <span className="hidden xl:inline">New</span>
             </button>
-
-            {/* File Operations: New, Open, Save */}
-            <div className="flex items-center gap-1.5 bg-zinc-100/70 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
-              <button
-                onClick={handleNewDiagram}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors"
-                title="New Diagram"
-              >
-                <FilePlus size={14} className="text-zinc-500 dark:text-zinc-400" />
-                <span className="hidden sm:inline">New</span>
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors"
-                title="Open .diaflow file"
-              >
-                <FolderOpen size={14} className="text-zinc-500 dark:text-zinc-400" />
-                <span className="hidden sm:inline">Open</span>
-              </button>
-              <button
-                onClick={() => exportDiagramToFile(nodes, edges, title, getViewport())}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors font-semibold"
-                title="Save Diagram (.diaflow)"
-              >
-                <Save size={14} />
-                <span className="hidden sm:inline">Save</span>
-              </button>
-            </div>
-
-            {/* Export & Clipboard */}
-            <div className="flex items-center gap-1.5 export-buttons border-l border-zinc-200 dark:border-zinc-800 pl-3">
-              <button 
-                onClick={copyImage} 
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm"
-                title="Copy to Clipboard"
-              >
-                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                <span className="hidden md:inline">{copied ? 'Copied!' : 'Copy'}</span>
-              </button>
-              <button 
-                onClick={() => downloadImage('png')} 
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm"
-              >
-                <DownloadCloud size={14} />
-                PNG
-              </button>
-              <button 
-                onClick={() => downloadImage('svg')} 
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors shadow-sm shadow-indigo-600/20"
-              >
-                <DownloadCloud size={14} />
-                SVG
-              </button>
-            </div>
-
-            {/* Theme Toggle */}
             <button
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="theme-toggle flex items-center justify-center w-8 h-8 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors ml-1"
-              title="Toggle theme"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
+              title="Open .diaflow file"
             >
-              {mounted && isDark ? <Sun size={17} /> : <Moon size={17} />}
+              <FolderOpen size={13} className="text-zinc-500 dark:text-zinc-400" />
+              <span className="hidden xl:inline">Open</span>
+            </button>
+            <button
+              onClick={() => exportDiagramToFile(nodes, edges, title, getViewport())}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors font-semibold cursor-pointer"
+              title="Save Diagram (.diaflow)"
+            >
+              <Save size={13} />
+              <span className="hidden xl:inline">Save</span>
             </button>
           </div>
-        </header>
-      )}
-      
-      {/* Workspace Body */}
-      <div className="flex flex-1 min-h-0 w-full relative overflow-hidden">
-        {/* Sidebar hidden in present mode */}
-        {!isPresenting && <Sidebar />}
 
-        <div className="flex-1 h-full min-h-0 w-full relative" ref={reactFlowWrapper}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onConnectStart={onConnectStart}
-            onConnectEnd={onConnectEnd}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            nodeTypes={nodeTypes}
-            fitView
-            nodesDraggable={!isPresenting}
-            nodesConnectable={!isPresenting}
-            elementsSelectable={true}
-            nodesFocusable={!isPresenting}
-            edgesFocusable={!isPresenting}
-            connectionRadius={32}
-            connectionMode={ConnectionMode.Loose}
-            proOptions={{ hideAttribution: true }}
-            className={`transition-colors ${isDark ? 'dark' : ''} ${isPresenting ? 'is-presenting' : ''}`}
-            defaultEdgeOptions={{ type: 'smoothstep' }}
-            deleteKeyCode={['Backspace', 'Delete']}
-            onEdgeDoubleClick={(_, edge) => setEdges((eds) => eds.filter((e) => e.id !== edge.id))}
+          {/* Export & Clipboard */}
+          <div className="flex items-center gap-1.5 export-buttons border-l border-zinc-200 dark:border-zinc-800 pl-2.5">
+            <button 
+              onClick={copyImage} 
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm cursor-pointer"
+              title="Copy to Clipboard"
+            >
+              {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+              <span className="hidden 2xl:inline">{copied ? 'Copied!' : 'Copy'}</span>
+            </button>
+            <button 
+              onClick={() => downloadImage('png')} 
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm cursor-pointer"
+              title="Download PNG"
+            >
+              <DownloadCloud size={13} />
+              <span className="hidden 2xl:inline">PNG</span>
+            </button>
+            <button 
+              onClick={() => downloadImage('svg')} 
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors shadow-sm shadow-indigo-600/20 cursor-pointer"
+              title="Download SVG"
+            >
+              <DownloadCloud size={13} />
+              <span className="hidden 2xl:inline">SVG</span>
+            </button>
+          </div>
+
+          {/* Theme Toggle */}
+          <button
+            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+            className="theme-toggle flex items-center justify-center w-8 h-8 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors ml-0.5 cursor-pointer"
+            title="Toggle theme"
           >
-            <Background color={isDark ? '#3f3f46' : '#d4d4d8'} gap={20} size={1} />
-            {!isPresenting && (
-              <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />
-            )}
-          </ReactFlow>
+            {mounted && isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
+      </header>
+    )}
+    
+    {/* Workspace Body */}
+    <div className="flex flex-1 min-h-0 w-full relative overflow-hidden">
+      {/* Sidebar hidden in present mode */}
+      {!isPresenting && <Sidebar />}
 
-          {/* Floating Help & Shortcuts Widget (Corner of Canvas) */}
+      {/* Main Flow Canvas */}
+      <div className="flex-1 h-full min-h-0 w-full relative" ref={reactFlowWrapper}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          nodesDraggable={!isPresenting}
+          nodesConnectable={!isPresenting}
+          elementsSelectable={true}
+          nodesFocusable={!isPresenting}
+          edgesFocusable={!isPresenting}
+          connectionRadius={32}
+          connectionMode={ConnectionMode.Loose}
+          proOptions={{ hideAttribution: true }}
+          className={`transition-colors ${isDark ? 'dark' : ''} ${isPresenting ? 'is-presenting' : ''}`}
+          defaultEdgeOptions={{ type: 'smoothstep' }}
+          deleteKeyCode={['Backspace', 'Delete']}
+          onEdgeDoubleClick={(_, edge) => {
+            if (isPresenting) return;
+            setEdges((eds) =>
+              eds.map((e) =>
+                e.id === edge.id
+                  ? { ...e, data: { ...e.data, isEditing: true } }
+                  : e
+              )
+            );
+          }}
+        >
+          <Background color={isDark ? '#3f3f46' : '#d4d4d8'} gap={20} size={1} />
           {!isPresenting && (
-            <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end">
-              {/* Help Popover */}
-              {showHelp && (
-                <div className="mb-2.5 w-72 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-900 dark:text-zinc-100">
-                    <span className="flex items-center gap-1.5 text-xs">
-                      <HelpCircle size={14} className="text-indigo-500" />
-                      Shortcuts & Tips
-                    </span>
-                    <button
-                      onClick={() => setShowHelp(false)}
-                      className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
+            <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />
+          )}
+        </ReactFlow>
 
-                  <div className="space-y-2 text-[11px] leading-relaxed">
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Present Mode</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">P</kbd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Delete Node / Wire</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Del / Backspace</kbd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Save Diagram</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + S</kbd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Delete Connection</span>
-                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click wire</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Edit Label</span>
-                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click node</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Change Icon & Color</span>
-                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Click node icon</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Open Diagram</span>
-                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">Drag & drop .diaflow</span>
-                    </div>
+        {/* Floating Help & Shortcuts Widget */}
+        {!isPresenting && (
+          <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end">
+            {/* Help Popover */}
+            {showHelp && (
+              <div className="mb-2.5 w-72 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-900 dark:text-zinc-100">
+                  <span className="flex items-center gap-1.5 text-xs">
+                    <HelpCircle size={14} className="text-indigo-500" />
+                    Shortcuts & Tips
+                  </span>
+                  <button
+                    onClick={() => setShowHelp(false)}
+                    className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-[11px] leading-relaxed">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Present Mode</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">P</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Add / Edit Wire Label</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click wire</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Delete Node / Wire</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Del / Backspace</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Save Diagram</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + S</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Edit Node Label</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click node</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Change Icon & Color</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Click node icon</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Open Diagram</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Drag & drop .diaflow</span>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Small Help Icon Button */}
-              <button
-                onClick={() => setShowHelp((prev) => !prev)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center border shadow-lg transition-all cursor-pointer ${
-                  showHelp
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-700'
-                }`}
-                title="Keyboard Shortcuts & Tips"
-              >
-                <HelpCircle size={16} />
-              </button>
-            </div>
-          )}
+            {/* Small Help Icon Button */}
+            <button
+              onClick={() => setShowHelp((prev) => !prev)}
+              className={`w-8 h-8 rounded-full flex items-center justify-center border shadow-lg transition-all cursor-pointer ${
+                showHelp
+                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-700'
+              }`}
+              title="Keyboard Shortcuts & Tips"
+            >
+              <HelpCircle size={16} />
+            </button>
+          </div>
+        )}
 
-          {/* Floating Presenter Bar */}
-          {isPresenting && (
-            <div className="presenter-bar absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 px-1 truncate max-w-[200px]">
-                {title}
-              </span>
-              
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+        {/* Floating Presenter Bar */}
+        {isPresenting && (
+          <div className="presenter-bar absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 px-1 truncate max-w-[200px]">
+              {title}
+            </span>
+            
+            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
 
-              <button
-                onClick={() => zoomIn({ duration: 200 })}
-                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
-                title="Zoom In"
-              >
-                <ZoomIn size={16} />
-              </button>
-              <button
-                onClick={() => zoomOut({ duration: 200 })}
-                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
-                title="Zoom Out"
-              >
-                <ZoomOut size={16} />
-              </button>
-              <button
-                onClick={() => fitView({ padding: 0.15, duration: 400 })}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-full transition-colors"
-                title="Fit View"
-              >
-                <Maximize2 size={13} />
-                <span>Fit</span>
-              </button>
+            <button
+              onClick={() => zoomIn({ duration: 200 })}
+              className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+              title="Zoom In"
+            >
+              <ZoomIn size={16} />
+            </button>
+            <button
+              onClick={() => zoomOut({ duration: 200 })}
+              className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+              title="Zoom Out"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <button
+              onClick={() => fitView({ padding: 0.15, duration: 400 })}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-full transition-colors"
+              title="Fit View"
+            >
+              <Maximize2 size={13} />
+              <span>Fit</span>
+            </button>
 
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
 
-              <button
-                onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
-                title="Toggle Theme"
-              >
-                {isDark ? <Sun size={16} /> : <Moon size={16} />}
-              </button>
+            <button
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+              title="Toggle Theme"
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
 
-              <button
-                onClick={exitPresentMode}
-                className="flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-full transition-colors shadow-sm"
-                title="Exit Presentation Mode (ESC)"
-              >
-                <X size={14} />
-                <span>Exit</span>
-              </button>
-            </div>
-          )}
-        </div>
+            <button
+              onClick={exitPresentMode}
+              className="flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-full transition-colors shadow-sm"
+              title="Exit Presentation Mode (ESC)"
+            >
+              <X size={14} />
+              <span>Exit</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* AI Copilot Slide-over Drawer */}
+      <AICopilotDrawer
+        isOpen={isCopilotOpen && !isPresenting}
+        onClose={() => setIsCopilotOpen(false)}
+        nodes={nodes}
+        edges={edges}
+        title={title}
+        onUpdateDiagram={(newNodes, newEdges) => {
+          setNodes(newNodes);
+          setEdges(newEdges);
+          setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50);
+        }}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        aiConfig={aiConfig}
+      />
+    </div>
+
+    {/* AI Prompt Modal (Text-to-Diagram) */}
+    <AIPromptModal
+      isOpen={isAIModalOpen}
+      onClose={() => setIsAIModalOpen(false)}
+      onApplyDiagram={(newNodes, newEdges, newTitle, summary) => {
+        setNodes(newNodes);
+        setEdges(newEdges);
+        if (newTitle) setTitle(newTitle);
+        setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 80);
+      }}
+      onOpenSettings={() => {
+        setIsAIModalOpen(false);
+        setIsSettingsOpen(true);
+      }}
+      aiConfig={aiConfig}
+    />
+
+      {/* AI Settings Modal (Multi-Provider Configuration) */}
+      <AISettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        config={aiConfig}
+        onSaveConfig={handleSaveAIConfig}
+      />
     </div>
   );
 };

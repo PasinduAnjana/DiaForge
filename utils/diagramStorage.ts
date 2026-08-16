@@ -1,17 +1,10 @@
 import { Node, Edge, Viewport } from 'reactflow';
-
-export interface DiaFlowDocument {
-  version: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  nodes: Node[];
-  edges: Edge[];
-  viewport?: Viewport;
-}
+import { DiaFlowDocumentSchema, DiaFlowDocument } from '@/schemas/diagram.schema';
 
 const STORAGE_KEY = 'diaflow_saved_state';
 const TITLE_STORAGE_KEY = 'diaflow_diagram_title';
+
+export type { DiaFlowDocument };
 
 /**
  * Exports current nodes and edges to a downloadable .diaflow (JSON) file
@@ -25,10 +18,9 @@ export const exportDiagramToFile = (
   const docData: DiaFlowDocument = {
     version: '1.0',
     name: diagramName,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    nodes,
-    edges,
+    lastModified: new Date().toISOString(),
+    nodes: nodes as any,
+    edges: edges as any,
     viewport,
   };
 
@@ -48,33 +40,26 @@ export const exportDiagramToFile = (
 };
 
 /**
- * Validates and parses raw JSON string into DiaFlowDocument
+ * Validates and parses raw JSON string into DiaFlowDocument using Zod schema
  */
 export const parseDiagramJSON = (jsonString: string): DiaFlowDocument => {
   try {
-    const data = JSON.parse(jsonString);
+    const raw = JSON.parse(jsonString);
+    const result = DiaFlowDocumentSchema.safeParse(raw);
 
-    // Support both standard { nodes, edges } and full DiaFlowDocument
-    if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
-      throw new Error('Invalid diagram file: missing nodes or edges array.');
+    if (!result.success) {
+      const errorMsg = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
+      throw new Error(`Diagram validation failed: ${errorMsg}`);
     }
 
-    return {
-      version: data.version || '1.0',
-      name: data.name || 'Imported Diagram',
-      createdAt: data.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      nodes: data.nodes,
-      edges: data.edges,
-      viewport: data.viewport,
-    };
+    return result.data as unknown as DiaFlowDocument;
   } catch (error) {
     throw new Error(`Failed to parse diagram JSON: ${(error as Error).message}`);
   }
 };
 
 /**
- * Reads a File object and returns parsed DiaFlowDocument
+ * Reads a File object and returns validated DiaFlowDocument
  */
 export const readDiagramFile = (file: File): Promise<DiaFlowDocument> => {
   return new Promise((resolve, reject) => {
@@ -88,7 +73,7 @@ export const readDiagramFile = (file: File): Promise<DiaFlowDocument> => {
         reject(err);
       }
     };
-    reader.onerror = () => reject(new Error('Failed to read file.'));
+    reader.onerror = () => reject(new Error('Failed to read diagram file.'));
     reader.readAsText(file);
   });
 };
@@ -108,10 +93,9 @@ export const saveDiagramToStorage = (
     const doc: DiaFlowDocument = {
       version: '1.0',
       name: diagramName,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      nodes,
-      edges,
+      lastModified: new Date().toISOString(),
+      nodes: nodes as any,
+      edges: edges as any,
       viewport,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
@@ -122,7 +106,7 @@ export const saveDiagramToStorage = (
 };
 
 /**
- * LocalStorage Load
+ * LocalStorage Load with Zod Safe Parsing
  */
 export const loadDiagramFromStorage = (): DiaFlowDocument | null => {
   if (typeof window === 'undefined') return null;
