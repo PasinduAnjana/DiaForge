@@ -122,6 +122,7 @@ export const createIconCardNode = ({
             <button
               type="button"
               onClick={(e) => {
+                if (e.currentTarget.closest('.is-presenting')) return;
                 e.stopPropagation();
                 setIsPickerOpen(true);
               }}

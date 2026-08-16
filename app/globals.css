@@ -27,6 +27,31 @@
   scale: 1.35;
 }
 
+.is-presenting .react-flow__handle,
+.is-presenting .react-flow__resize-control,
+.is-presenting .react-flow__resizer {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Subtle Spotlight Glow: Slight, clean glow when a node is clicked in Present Mode */
+.is-presenting .react-flow__node.selected {
+  filter: drop-shadow(0 0 6px var(--node-glow-color, rgba(99, 102, 241, 0.4))) !important;
+  z-index: 100 !important;
+}
+
+.is-presenting .react-flow__node.selected > div,
+.is-presenting .react-flow__node.selected .is-node-selected {
+  filter: drop-shadow(0 0 6px var(--node-glow-color, rgba(99, 102, 241, 0.4))) !important;
+}
+
+/* Lock node interaction buttons inside canvas in present mode */
+.is-presenting .react-flow__node button {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

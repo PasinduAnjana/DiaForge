@@ -29,7 +29,12 @@ import {
   Workflow, 
   FolderOpen, 
   Save, 
-  FilePlus 
+  FilePlus,
+  Play,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
+  X
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import {
@@ -54,6 +59,24 @@ const DiagramFlow = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [title, setTitle] = useState('Untitled Architecture');
   const [isSaved, setIsSaved] = useState(true);
+  const [isPresenting, setIsPresenting] = useState(false);
+
+  const { screenToFlowPosition, fitView, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const enterPresentMode = useCallback(() => {
+    setIsPresenting(true);
+    // Deselect all nodes and edges for presentation
+    setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
+    setEdges((eds) => eds.map((e) => ({ ...e, selected: false })));
+    setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 100);
+  }, [fitView, setNodes, setEdges]);
+
+  const exitPresentMode = useCallback(() => {
+    setIsPresenting(false);
+  }, []);
 
   // Smart Alignment on Node Drag: Snaps connection ports to align horizontally/vertically
   const onNodesChange = useCallback(
@@ -117,11 +140,6 @@ const DiagramFlow = () => {
     [setNodes]
   );
 
-  const { screenToFlowPosition, fitView, getViewport, setViewport } = useReactFlow();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [copied, setCopied] = useState(false);
-
   // 1. Initial Load from LocalStorage
   useEffect(() => {
     setMounted(true);
@@ -138,23 +156,42 @@ const DiagramFlow = () => {
 
   // 2. Debounced Auto-Save
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || isPresenting) return;
     setIsSaved(false);
     const timer = setTimeout(() => {
       saveDiagramToStorage(nodes, edges, title, getViewport());
       setIsSaved(true);
     }, 400);
     return () => clearTimeout(timer);
-  }, [nodes, edges, title, mounted, getViewport]);
+  }, [nodes, edges, title, mounted, getViewport, isPresenting]);
 
   // 3. Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Toggle / Exit Present Mode on ESC
+      if (e.key === 'Escape') {
+        if (isPresenting) {
+          exitPresentMode();
+          return;
+        }
+      }
+
       // Ignore if typing in an input or textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      // Delete Node(s) or Edge(s)
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Present shortcut (P key)
+      if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (isPresenting) {
+          exitPresentMode();
+        } else {
+          enterPresentMode();
+        }
+        return;
+      }
+
+      // Delete Node(s) or Edge(s) (only in edit mode)
+      if (!isPresenting && (e.key === 'Delete' || e.key === 'Backspace')) {
         setNodes((nds) => {
           const selectedNodeIds = new Set(nds.filter((n) => n.selected).map((n) => n.id));
           
@@ -172,23 +209,6 @@ const DiagramFlow = () => {
         });
       }
 
-      // Rotate Orientation (R key)
-      if (e.key.toLowerCase() === 'r') {
-        setNodes((nds) => nds.map(node => {
-          if (node.selected) {
-            const currentOrientation = node.data.orientation || 'vertical';
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                orientation: currentOrientation === 'vertical' ? 'horizontal' : 'vertical'
-              }
-            };
-          }
-          return node;
-        }));
-      }
-
       // Save shortcut (Cmd/Ctrl + S)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -198,17 +218,20 @@ const DiagramFlow = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setNodes, setEdges, nodes, edges, title, getViewport]);
+  }, [setNodes, setEdges, nodes, edges, title, getViewport, isPresenting, enterPresentMode, exitPresentMode]);
 
   const onConnect = useCallback(
-    (params: Edge | Connection) => setEdges((eds) => addEdge({ 
-      ...params, 
-      type: 'smoothstep', 
-      animated: true, 
-      style: { stroke: '#a1a1aa', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#a1a1aa' },
-    }, eds)),
-    [setEdges],
+    (params: Edge | Connection) => {
+      if (isPresenting) return;
+      setEdges((eds) => addEdge({ 
+        ...params, 
+        type: 'smoothstep', 
+        animated: true, 
+        style: { stroke: '#a1a1aa', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#a1a1aa' },
+      }, eds));
+    },
+    [setEdges, isPresenting],
   );
 
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -219,6 +242,7 @@ const DiagramFlow = () => {
   const onDrop = useCallback(
     async (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
+      if (isPresenting) return;
 
       // Check if a file was dropped directly onto the canvas
       if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
@@ -261,7 +285,7 @@ const DiagramFlow = () => {
         return nds.concat(newNode);
       });
     },
-    [screenToFlowPosition, setNodes, setEdges, fitView],
+    [screenToFlowPosition, setNodes, setEdges, fitView, isPresenting],
   );
 
   // File Upload Handler
@@ -298,7 +322,7 @@ const DiagramFlow = () => {
     if (reactFlowWrapper.current === null) return;
     
     const filter = (node: HTMLElement) => {
-      const exclusionClasses = ['react-flow__controls', 'react-flow__panel', 'export-buttons', 'theme-toggle'];
+      const exclusionClasses = ['react-flow__controls', 'react-flow__panel', 'export-buttons', 'theme-toggle', 'presenter-bar'];
       return !exclusionClasses.some((className) => node.classList?.contains(className));
     };
 
@@ -332,7 +356,7 @@ const DiagramFlow = () => {
     if (reactFlowWrapper.current === null) return;
     
     const filter = (node: HTMLElement) => {
-      const exclusionClasses = ['react-flow__controls', 'react-flow__panel', 'export-buttons', 'theme-toggle'];
+      const exclusionClasses = ['react-flow__controls', 'react-flow__panel', 'export-buttons', 'theme-toggle', 'presenter-bar'];
       return !exclusionClasses.some((className) => node.classList?.contains(className));
     };
 
@@ -361,15 +385,16 @@ const DiagramFlow = () => {
   const isDark = mounted ? theme === 'dark' : true;
 
   const onConnectStart = useCallback(() => {
+    if (isPresenting) return;
     document.documentElement.classList.add('is-connecting');
-  }, []);
+  }, [isPresenting]);
 
   const onConnectEnd = useCallback(() => {
     document.documentElement.classList.remove('is-connecting');
   }, []);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white overflow-hidden transition-colors">
+    <div className={`flex flex-col h-screen w-full bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white overflow-hidden transition-colors ${isPresenting ? 'is-presenting' : ''}`}>
       {/* Hidden File Input */}
       <input
         type="file"
@@ -379,103 +404,117 @@ const DiagramFlow = () => {
         className="hidden"
       />
 
-      {/* Header Panel */}
-      <header className="h-14 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-5 bg-white dark:bg-zinc-950 z-20 shadow-sm dark:shadow-black/50 transition-colors">
-        {/* Left: Brand & Diagram Title */}
-        <div className="flex items-center gap-3">
-          <Workflow className="w-6 h-6 text-indigo-600 dark:text-indigo-500 shrink-0" />
-          <h1 className="font-bold text-lg tracking-tight text-zinc-800 dark:text-zinc-100">DiaFlow</h1>
+      {/* Header Panel (Hidden during presentation mode) */}
+      {!isPresenting && (
+        <header className="h-14 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-5 bg-white dark:bg-zinc-950 z-20 shadow-sm dark:shadow-black/50 transition-colors">
+          {/* Left: Brand & Diagram Title */}
+          <div className="flex items-center gap-3">
+            <Workflow className="w-6 h-6 text-indigo-600 dark:text-indigo-500 shrink-0" />
+            <h1 className="font-bold text-lg tracking-tight text-zinc-800 dark:text-zinc-100">DiaFlow</h1>
+            
+            <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800 mx-1" />
+
+            {/* Editable Title */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="text-xs font-semibold px-2 py-1 bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 outline-none focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 dark:focus:border-indigo-400 text-zinc-700 dark:text-zinc-200 transition-colors min-w-[160px] max-w-[240px] truncate"
+                title="Click to rename diagram"
+              />
+
+              {/* Auto-save indicator */}
+              <span className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-400 select-none">
+                <span className={`w-1.5 h-1.5 rounded-full ${isSaved ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                {isSaved ? 'Saved' : 'Saving...'}
+              </span>
+            </div>
+          </div>
           
-          <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800 mx-1" />
-
-          {/* Editable Title */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="text-xs font-semibold px-2 py-1 bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 outline-none focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 dark:focus:border-indigo-400 text-zinc-700 dark:text-zinc-200 transition-colors min-w-[160px] max-w-[240px] truncate"
-              title="Click to rename diagram"
-            />
-
-            {/* Auto-save indicator */}
-            <span className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-400 select-none">
-              <span className={`w-1.5 h-1.5 rounded-full ${isSaved ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-              {isSaved ? 'Saved' : 'Saving...'}
-            </span>
-          </div>
-        </div>
-        
-        {/* Right: Actions Toolbar */}
-        <div className="flex items-center gap-3">
-          {/* File Operations: New, Open, Save */}
-          <div className="flex items-center gap-1.5 bg-zinc-100/70 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+          {/* Right: Actions Toolbar */}
+          <div className="flex items-center gap-3">
+            {/* Present Button */}
             <button
-              onClick={handleNewDiagram}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors"
-              title="New Diagram"
+              onClick={enterPresentMode}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm shadow-emerald-600/20"
+              title="Present Diagram (P key)"
             >
-              <FilePlus size={14} className="text-zinc-500 dark:text-zinc-400" />
-              <span className="hidden sm:inline">New</span>
+              <Play size={13} className="fill-current" />
+              <span>Present</span>
             </button>
+
+            {/* File Operations: New, Open, Save */}
+            <div className="flex items-center gap-1.5 bg-zinc-100/70 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <button
+                onClick={handleNewDiagram}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors"
+                title="New Diagram"
+              >
+                <FilePlus size={14} className="text-zinc-500 dark:text-zinc-400" />
+                <span className="hidden sm:inline">New</span>
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors"
+                title="Open .diaflow file"
+              >
+                <FolderOpen size={14} className="text-zinc-500 dark:text-zinc-400" />
+                <span className="hidden sm:inline">Open</span>
+              </button>
+              <button
+                onClick={() => exportDiagramToFile(nodes, edges, title, getViewport())}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors font-semibold"
+                title="Save Diagram (.diaflow)"
+              >
+                <Save size={14} />
+                <span className="hidden sm:inline">Save</span>
+              </button>
+            </div>
+
+            {/* Export & Clipboard */}
+            <div className="flex items-center gap-1.5 export-buttons border-l border-zinc-200 dark:border-zinc-800 pl-3">
+              <button 
+                onClick={copyImage} 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm"
+                title="Copy to Clipboard"
+              >
+                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                <span className="hidden md:inline">{copied ? 'Copied!' : 'Copy'}</span>
+              </button>
+              <button 
+                onClick={() => downloadImage('png')} 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm"
+              >
+                <DownloadCloud size={14} />
+                PNG
+              </button>
+              <button 
+                onClick={() => downloadImage('svg')} 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors shadow-sm shadow-indigo-600/20"
+              >
+                <DownloadCloud size={14} />
+                SVG
+              </button>
+            </div>
+
+            {/* Theme Toggle */}
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors"
-              title="Open .diaflow file"
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="theme-toggle flex items-center justify-center w-8 h-8 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors ml-1"
+              title="Toggle theme"
             >
-              <FolderOpen size={14} className="text-zinc-500 dark:text-zinc-400" />
-              <span className="hidden sm:inline">Open</span>
-            </button>
-            <button
-              onClick={() => exportDiagramToFile(nodes, edges, title, getViewport())}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors font-semibold"
-              title="Save Diagram (.diaflow)"
-            >
-              <Save size={14} />
-              <span className="hidden sm:inline">Save</span>
+              {mounted && isDark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
           </div>
-
-          {/* Export & Clipboard */}
-          <div className="flex items-center gap-1.5 export-buttons border-l border-zinc-200 dark:border-zinc-800 pl-3">
-            <button 
-              onClick={copyImage} 
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm"
-              title="Copy to Clipboard"
-            >
-              {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-              <span className="hidden md:inline">{copied ? 'Copied!' : 'Copy'}</span>
-            </button>
-            <button 
-              onClick={() => downloadImage('png')} 
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors border border-zinc-200 dark:border-zinc-700 shadow-sm"
-            >
-              <DownloadCloud size={14} />
-              PNG
-            </button>
-            <button 
-              onClick={() => downloadImage('svg')} 
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors shadow-sm shadow-indigo-600/20"
-            >
-              <DownloadCloud size={14} />
-              SVG
-            </button>
-          </div>
-
-          {/* Theme Toggle */}
-          <button
-            onClick={() => setTheme(isDark ? 'light' : 'dark')}
-            className="theme-toggle flex items-center justify-center w-8 h-8 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors ml-1"
-            title="Toggle theme"
-          >
-            {mounted && isDark ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
       
       {/* Workspace Body */}
       <div className="flex flex-1 min-h-0 w-full relative overflow-hidden">
-        <Sidebar />
+        {/* Sidebar hidden in present mode */}
+        {!isPresenting && <Sidebar />}
+
         <div className="flex-1 h-full min-h-0 w-full relative" ref={reactFlowWrapper}>
           <ReactFlow
             nodes={nodes}
@@ -489,17 +528,77 @@ const DiagramFlow = () => {
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
             fitView
+            nodesDraggable={!isPresenting}
+            nodesConnectable={!isPresenting}
+            elementsSelectable={true}
+            nodesFocusable={!isPresenting}
+            edgesFocusable={!isPresenting}
             connectionRadius={32}
             connectionMode={ConnectionMode.Loose}
             proOptions={{ hideAttribution: true }}
-            className={`transition-colors ${isDark ? 'dark' : ''}`}
+            className={`transition-colors ${isDark ? 'dark' : ''} ${isPresenting ? 'is-presenting' : ''}`}
             defaultEdgeOptions={{ type: 'smoothstep' }}
             deleteKeyCode={['Backspace', 'Delete']}
             onEdgeDoubleClick={(_, edge) => setEdges((eds) => eds.filter((e) => e.id !== edge.id))}
           >
             <Background color={isDark ? '#3f3f46' : '#d4d4d8'} gap={20} size={1} />
-            <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />
+            {!isPresenting && (
+              <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />
+            )}
           </ReactFlow>
+
+          {/* Floating Presenter Bar */}
+          {isPresenting && (
+            <div className="presenter-bar absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
+              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 px-1 truncate max-w-[200px]">
+                {title}
+              </span>
+              
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+
+              <button
+                onClick={() => zoomIn({ duration: 200 })}
+                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+                title="Zoom In"
+              >
+                <ZoomIn size={16} />
+              </button>
+              <button
+                onClick={() => zoomOut({ duration: 200 })}
+                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+                title="Zoom Out"
+              >
+                <ZoomOut size={16} />
+              </button>
+              <button
+                onClick={() => fitView({ padding: 0.15, duration: 400 })}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-full transition-colors"
+                title="Fit View"
+              >
+                <Maximize2 size={13} />
+                <span>Fit</span>
+              </button>
+
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+
+              <button
+                onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
+                title="Toggle Theme"
+              >
+                {isDark ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+
+              <button
+                onClick={exitPresentMode}
+                className="flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-full transition-colors shadow-sm"
+                title="Exit Presentation Mode (ESC)"
+              >
+                <X size={14} />
+                <span>Exit</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
