@@ -92,7 +92,7 @@ const DiagramFlow = () => {
   const [aiConfig, setAiConfig] = useState<AIClientConfig>({
     provider: 'groq',
     apiKey: '',
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
   });
 
   const { screenToFlowPosition, fitView, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
@@ -100,12 +100,17 @@ const DiagramFlow = () => {
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Load custom AI configuration on mount
+  // Load custom AI configuration on mount and migrate legacy rate-limited models
   useEffect(() => {
     try {
       const stored = localStorage.getItem('diaflow_ai_config');
       if (stored) {
-        setAiConfig(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (parsed.model === 'llama-3.3-70b-versatile' || !parsed.model) {
+          parsed.model = 'llama-3.1-8b-instant';
+          localStorage.setItem('diaflow_ai_config', JSON.stringify(parsed));
+        }
+        setAiConfig(parsed);
       }
     } catch {
       // Ignore local storage error

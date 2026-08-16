@@ -13,9 +13,9 @@ export const PROVIDER_DEFAULTS: Record<
   { name: string; baseURL: string; defaultModel: string; envKeyName: string; link: string }
 > = {
   groq: {
-    name: 'Groq (Free 14.4k RPD)',
+    name: 'Groq (Free 14.4k RPD / High TPM)',
     baseURL: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'llama-3.1-8b-instant',
     envKeyName: 'GROQ_API_KEY',
     link: 'https://console.groq.com/keys',
   },
@@ -65,7 +65,12 @@ export function resolveAIConfig(customConfig?: AIClientConfig): {
   }
 
   const defaultInfo = PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS.groq;
-  const model = customConfig?.model || defaultInfo.defaultModel;
+  let model = customConfig?.model || defaultInfo.defaultModel;
+
+  // Auto-migrate rate-limited legacy 70B model to high-limit 8B instant model
+  if (provider === 'groq' && (model === 'llama-3.3-70b-versatile' || model === 'llama3-70b-8192')) {
+    model = 'llama-3.1-8b-instant';
+  }
 
   return {
     provider,

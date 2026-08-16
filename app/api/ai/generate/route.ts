@@ -110,37 +110,64 @@ Color Palette Rules for Modern ERDs:
 - Multivalued Attributes ("erd_multivalued_attribute"): color "cyan"
 - Derived Attributes ("erd_derived_attribute"): color "amber"
 
-CRITICAL INSTRUCTION 2 - Connection Rules:
-1. Attribute -> Entity connections:
-   - Connect each attribute directly to its parent entity (no label, animated: false).
-   - e.g. { "id": "e1", "source": "attr_cid", "target": "ent_customer", "animated": false }
-2. Entity <-> Relationship connections:
-   - Connect Entities to Relationships with cardinality label ("1", "M", or "N").
-   - e.g. { "id": "e3", "source": "ent_customer", "target": "rel_borrows", "label": "1", "animated": false }
-   - e.g. { "id": "e4", "source": "rel_borrows", "target": "ent_loan", "label": "M", "animated": false }
-3. DO NOT connect Attribute to Attribute or Relationship to Relationship.
+CRITICAL INSTRUCTION 2 - Mandatory Entity-to-Entity Relationships:
+1. MANDATORY RELATIONSHIPS:
+   - Entities MUST ALWAYS be connected to each other through Relationship Diamonds ("erd_relationship" or "erd_weak_relationship").
+   - NEVER leave entities isolated or standalone!
+   - For example, if you have Customer, Order, Product, Supplier:
+     * Customer --(1)--> [Places] --(N)--> Order
+     * Order --(M)--> [Contains] --(N)--> Product
+     * Supplier --(1)--> [Supplies] --(N)--> Product
+2. Cardinality Labels:
+   - Every edge connecting an Entity to a Relationship MUST have a cardinality label ("1", "M", or "N").
+3. Attribute -> Entity connections:
+   - EVERY attribute node MUST connect directly to its parent entity (no label, animated: false).
+   - For each entity, generate 3 to 5 key attributes (1 Primary Key PK + 2-4 standard attributes).
+4. DO NOT connect Attribute to Attribute or Relationship to Relationship.
 
 Return ONLY valid JSON matching this schema:
 {
-  "name": "Banking Customer & Loan ERD",
-  "summary": "Chen's ER Model representing Customer strong entity (C_id PK, C_name) and Loan weak entity (L-name, L-date) connected through Borrows relationship.",
+  "name": "E-Commerce ER Diagram",
+  "summary": "Chen's ER Model showing Customer placing Orders, Orders containing Products, and Suppliers supplying Products.",
   "diagramType": "erd",
   "nodes": [
-    { "id": "attr_cid", "type": "erd_key_attribute", "label": "C_id", "color": "emerald" },
-    { "id": "attr_cname", "type": "erd_attribute", "label": "C_name", "color": "zinc" },
+    { "id": "attr_cust_id", "type": "erd_key_attribute", "label": "Customer_ID", "color": "emerald" },
+    { "id": "attr_cust_name", "type": "erd_attribute", "label": "Name", "color": "zinc" },
+    { "id": "attr_cust_email", "type": "erd_attribute", "label": "Email", "color": "zinc" },
     { "id": "ent_customer", "type": "erd_entity", "label": "Customer", "color": "indigo" },
-    { "id": "rel_borrows", "type": "erd_relationship", "label": "Borrows", "color": "amber" },
-    { "id": "ent_loan", "type": "erd_weak_entity", "label": "Loan", "color": "purple" },
-    { "id": "attr_lname", "type": "erd_attribute", "label": "L-name", "color": "zinc" },
-    { "id": "attr_ldate", "type": "erd_attribute", "label": "L-date", "color": "zinc" }
+    
+    { "id": "rel_places", "type": "erd_relationship", "label": "Places", "color": "amber" },
+    
+    { "id": "ent_order", "type": "erd_entity", "label": "Order", "color": "indigo" },
+    { "id": "attr_ord_id", "type": "erd_key_attribute", "label": "Order_ID", "color": "emerald" },
+    { "id": "attr_ord_date", "type": "erd_attribute", "label": "Order_Date", "color": "zinc" },
+    { "id": "attr_ord_total", "type": "erd_attribute", "label": "Total_Amount", "color": "zinc" },
+    
+    { "id": "rel_contains", "type": "erd_relationship", "label": "Contains", "color": "amber" },
+    
+    { "id": "ent_product", "type": "erd_entity", "label": "Product", "color": "indigo" },
+    { "id": "attr_prod_id", "type": "erd_key_attribute", "label": "Product_ID", "color": "emerald" },
+    { "id": "attr_prod_name", "type": "erd_attribute", "label": "Product_Name", "color": "zinc" },
+    { "id": "attr_prod_price", "type": "erd_attribute", "label": "Price", "color": "zinc" }
   ],
   "edges": [
-    { "id": "e1", "source": "attr_cid", "target": "ent_customer", "animated": false },
-    { "id": "e2", "source": "attr_cname", "target": "ent_customer", "animated": false },
-    { "id": "e3", "source": "ent_customer", "target": "rel_borrows", "label": "1", "animated": false },
-    { "id": "e4", "source": "rel_borrows", "target": "ent_loan", "label": "M", "animated": false },
-    { "id": "e5", "source": "attr_lname", "target": "ent_loan", "animated": false },
-    { "id": "e6", "source": "attr_ldate", "target": "ent_loan", "animated": false }
+    { "id": "e1", "source": "attr_cust_id", "target": "ent_customer", "animated": false },
+    { "id": "e2", "source": "attr_cust_name", "target": "ent_customer", "animated": false },
+    { "id": "e3", "source": "attr_cust_email", "target": "ent_customer", "animated": false },
+    
+    { "id": "e4", "source": "ent_customer", "target": "rel_places", "label": "1", "animated": false },
+    { "id": "e5", "source": "rel_places", "target": "ent_order", "label": "N", "animated": false },
+    
+    { "id": "e6", "source": "attr_ord_id", "target": "ent_order", "animated": false },
+    { "id": "e7", "source": "attr_ord_date", "target": "ent_order", "animated": false },
+    { "id": "e8", "source": "attr_ord_total", "target": "ent_order", "animated": false },
+    
+    { "id": "e9", "source": "ent_order", "target": "rel_contains", "label": "M", "animated": false },
+    { "id": "e10", "source": "rel_contains", "target": "ent_product", "label": "N", "animated": false },
+    
+    { "id": "e11", "source": "attr_prod_id", "target": "ent_product", "animated": false },
+    { "id": "e12", "source": "attr_prod_name", "target": "ent_product", "animated": false },
+    { "id": "e13", "source": "attr_prod_price", "target": "ent_product", "animated": false }
   ]
 }
 `;
@@ -157,11 +184,14 @@ export async function POST(req: NextRequest) {
     const systemPromptToUse =
       diagramType === 'erd' ? SYSTEM_PROMPT_ERD : SYSTEM_PROMPT_ARCHITECTURE;
 
+    const userPromptText =
+      diagramType === 'erd'
+        ? `Create a fully connected Peter Chen ER Diagram for: "${prompt}". You MUST include Relationship Diamonds ("erd_relationship", e.g. Places, Contains, Supplies, Borrows, Enrolls) connecting every entity to its related entities with cardinality labels ("1", "M", "N"), along with all entity attributes.`
+        : `Design a formal tiered architecture diagram for: "${prompt}"`;
+
     const rawResponse = await generateAICompletion({
       systemPrompt: systemPromptToUse,
-      userPrompt: `Design a formal ${
-        diagramType === 'erd' ? "Peter Chen's ER Diagram" : 'tiered architecture diagram'
-      } for: "${prompt}"`,
+      userPrompt: userPromptText,
       jsonMode: true,
       config: aiConfig as AIClientConfig,
     });

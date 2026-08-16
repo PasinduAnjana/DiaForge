@@ -21,8 +21,8 @@ export function isERDiagram(nodes: Node[]): boolean {
 }
 
 /**
- * Formats Peter Chen's ER Diagrams with entities & relationships on a central backbone
- * and attributes clustered fanning out above/below each entity
+ * Formats Peter Chen's ER Diagrams with balanced radial attribute clustering (above and below)
+ * and dynamic entity spacing to prevent overlapping
  */
 export function layoutERDElements(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
   const entityNodes = nodes.filter(
@@ -43,118 +43,363 @@ export function layoutERDElements(nodes: Node[], edges: Edge[]): { nodes: Node[]
   const entityAttrMap = new Map<string, Node[]>();
   entityNodes.forEach((e) => entityAttrMap.set(e.id, []));
 
+  const allEdges = [...edges];
+
   edges.forEach((edge) => {
     const srcNode = nodes.find((n) => n.id === edge.source);
     const tgtNode = nodes.find((n) => n.id === edge.target);
 
     if (srcNode && tgtNode) {
       if (attributeNodes.some((a) => a.id === srcNode.id) && entityAttrMap.has(tgtNode.id)) {
-        entityAttrMap.get(tgtNode.id)!.push(srcNode);
+        if (!entityAttrMap.get(tgtNode.id)!.some((n) => n.id === srcNode.id)) {
+          entityAttrMap.get(tgtNode.id)!.push(srcNode);
+        }
       } else if (attributeNodes.some((a) => a.id === tgtNode.id) && entityAttrMap.has(srcNode.id)) {
-        entityAttrMap.get(srcNode.id)!.push(tgtNode);
+        if (!entityAttrMap.get(srcNode.id)!.some((n) => n.id === tgtNode.id)) {
+          entityAttrMap.get(srcNode.id)!.push(tgtNode);
+        }
       }
     }
   });
 
-  const placedNodes: Node[] = [];
-  const startX = 60;
-  const backboneY = 220; // Center Y for Entities & Relationships
-  const stepX = 260; // Distance between Entity and Relationship
+  // Intelligent Auto-Attachment for orphaned attributes (e.g. if AI omitted edges)
+  const attachedAttrIds = new Set<string>();
+  entityAttrMap.forEach((attrs) => attrs.forEach((a) => attachedAttrIds.add(a.id)));
 
-  // Arrange backbone: Entity 1 -> Relationship -> Entity 2
-  let currentX = startX;
-  const backboneItems: Node[] = [];
+  attributeNodes.forEach((attr) => {
+    if (!attachedAttrIds.has(attr.id)) {
+      const attrLabel = (attr.data?.label || attr.id).toLowerCase();
+      
+      let matchedEntity = entityNodes.find((ent) => {
+        const entLabel = (ent.data?.label || ent.id).toLowerCase();
+        return (
+          attrLabel.startsWith(entLabel) ||
+          attrLabel.includes(entLabel) ||
+          attr.id.toLowerCase().includes(ent.id.toLowerCase())
+        );
+      });
 
-  // Interleave entities and relationships
-  const maxItems = Math.max(entityNodes.length, relationshipNodes.length);
-  for (let i = 0; i < maxItems; i++) {
-    if (i < entityNodes.length) backboneItems.push(entityNodes[i]);
-    if (i < relationshipNodes.length) backboneItems.push(relationshipNodes[i]);
+      // If no name match, match with the nearest preceding entity in the original nodes list
+      if (!matchedEntity && entityNodes.length > 0) {
+        const attrIndex = nodes.findIndex((n) => n.id === attr.id);
+        const precedingEntities = entityNodes.filter(
+          (ent) => nodes.findIndex((n) => n.id === ent.id) < attrIndex
+        );
+        matchedEntity = precedingEntities.length > 0 
+          ? precedingEntities[precedingEntities.length - 1] 
+          : entityNodes[0];
+      }
+
+      if (matchedEntity) {
+        entityAttrMap.get(matchedEntity.id)!.push(attr);
+        attachedAttrIds.add(attr.id);
+
+        allEdges.push({
+          id: `auto_e_${attr.id}_${matchedEntity.id}`,
+          source: attr.id,
+          target: matchedEntity.id,
+          type: 'straight',
+          animated: false,
+          data: { isStraight: true },
+        });
+      }
+    }
+  });
+
+  // If multiple entities exist without any relationship diamonds, synthesize relationships
+  const finalRelationshipNodes = [...relationshipNodes];
+
+  if (entityNodes.length >= 2 && finalRelationshipNodes.length === 0) {
+    for (let i = 0; i < entityNodes.length - 1; i++) {
+      const e1 = entityNodes[i];
+      const e2 = entityNodes[i + 1];
+      const l1 = (e1.data?.label || e1.id).toLowerCase();
+      const l2 = (e2.data?.label || e2.id).toLowerCase();
+
+      let relName = 'Relates';
+      if (l1.includes('cust') && l2.includes('order')) relName = 'Places';
+      else if (l1.includes('order') && l2.includes('prod')) relName = 'Contains';
+      else if (l1.includes('supp') && l2.includes('prod')) relName = 'Supplies';
+      else if (l1.includes('prod') && l2.includes('supp')) relName = 'Supplied By';
+      else if (l1.includes('stud') && l2.includes('course')) relName = 'Enrolls';
+      else if (l1.includes('inst') && l2.includes('course')) relName = 'Teaches';
+      else if (l1.includes('user') && l2.includes('post')) relName = 'Creates';
+      else if (l1.includes('user') && l2.includes('role')) relName = 'Has';
+
+      const relId = `auto_rel_${e1.id}_${e2.id}`;
+      const relNode: Node = {
+        id: relId,
+        type: 'erd_relationship',
+        position: { x: 0, y: 0 },
+        data: {
+          label: relName,
+          color: 'amber',
+          shape: 'relationship',
+        },
+      };
+
+      finalRelationshipNodes.push(relNode);
+
+      allEdges.push({
+        id: `e_${e1.id}_${relId}`,
+        source: e1.id,
+        target: relId,
+        label: '1',
+        type: 'straight',
+        animated: false,
+        data: { isStraight: true },
+      });
+
+      allEdges.push({
+        id: `e_${relId}_${e2.id}`,
+        source: relId,
+        target: e2.id,
+        label: 'N',
+        type: 'straight',
+        animated: false,
+        data: { isStraight: true },
+      });
+    }
   }
 
-  backboneItems.forEach((item) => {
+  const placedNodes: Node[] = [];
+  const startX = 80;
+  const backboneY = 240; // Center Y for Entities & Relationships
+
+  // Interleave entities and relationships into backbone sequence
+  const backboneItems: Node[] = [];
+  const maxItems = Math.max(entityNodes.length, finalRelationshipNodes.length);
+  for (let i = 0; i < maxItems; i++) {
+    if (i < entityNodes.length) backboneItems.push(entityNodes[i]);
+    if (i < finalRelationshipNodes.length) backboneItems.push(finalRelationshipNodes[i]);
+  }
+
+  // 1. Calculate dynamic half-width for each backbone item
+  const itemRadii: number[] = backboneItems.map((item) => {
     const isRel = item.type === 'erd_relationship' || item.type === 'erd_weak_relationship';
+    if (isRel) return 70; // Diamond radius
+    const attrs = entityAttrMap.get(item.id) || [];
+    const count = attrs.length;
+    if (count === 0) return 70;
+    const topCount = count > 3 ? Math.ceil(count / 2) : count;
+    const bottomCount = count > 3 ? Math.floor(count / 2) : 0;
+    const maxRow = Math.max(topCount, bottomCount);
+    // Attribute width ~90px + 14px gap = 104px per attribute
+    return Math.max((maxRow * 104) / 2 + 20, 75);
+  });
+
+  // 2. Position backbone items with dynamic non-overlapping spacing
+  let currentCenterX = startX;
+  const itemCenters: number[] = [];
+
+  backboneItems.forEach((_, idx) => {
+    if (idx === 0) {
+      currentCenterX = startX + itemRadii[0];
+    } else {
+      const prevRadius = itemRadii[idx - 1];
+      const currRadius = itemRadii[idx];
+      const gap = 60; // Clean margin between adjacent symbol clusters
+      currentCenterX += prevRadius + currRadius + gap;
+    }
+    itemCenters.push(currentCenterX);
+  });
+
+  // 3. Place backbone items and ensure all relationships are connected to entities
+  backboneItems.forEach((item, idx) => {
+    const isRel = item.type === 'erd_relationship' || item.type === 'erd_weak_relationship';
+    const centerX = itemCenters[idx];
     const posY = isRel ? backboneY - 8 : backboneY;
 
-    const placed: Node = {
+    placedNodes.push({
       ...item,
-      position: { x: currentX, y: posY },
+      position: { x: Math.round((centerX - 60) / 8) * 8, y: posY },
       zIndex: 10,
-    };
-    placedNodes.push(placed);
+    });
 
-    // Place attributes for entities
+    // If item is a Relationship Diamond, ensure it connects to adjacent entities
+    if (isRel) {
+      // Find left adjacent entity in backbone
+      let leftEntity: Node | undefined;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (backboneItems[i].type === 'erd_entity' || backboneItems[i].type === 'erd_weak_entity') {
+          leftEntity = backboneItems[i];
+          break;
+        }
+      }
+
+      // Find right adjacent entity in backbone
+      let rightEntity: Node | undefined;
+      for (let i = idx + 1; i < backboneItems.length; i++) {
+        if (backboneItems[i].type === 'erd_entity' || backboneItems[i].type === 'erd_weak_entity') {
+          rightEntity = backboneItems[i];
+          break;
+        }
+      }
+
+      // Check / synthesize connection with left entity
+      if (leftEntity) {
+        const hasLeftEdge = allEdges.some(
+          (e) =>
+            (e.source === leftEntity!.id && e.target === item.id) ||
+            (e.source === item.id && e.target === leftEntity!.id)
+        );
+        if (!hasLeftEdge) {
+          allEdges.push({
+            id: `auto_e_${leftEntity.id}_${item.id}`,
+            source: leftEntity.id,
+            target: item.id,
+            label: '1',
+            type: 'straight',
+            animated: false,
+            data: { isStraight: true },
+          });
+        }
+      }
+
+      // Check / synthesize connection with right entity
+      if (rightEntity) {
+        const hasRightEdge = allEdges.some(
+          (e) =>
+            (e.source === item.id && e.target === rightEntity!.id) ||
+            (e.source === rightEntity!.id && e.target === item.id)
+        );
+        if (!hasRightEdge) {
+          allEdges.push({
+            id: `auto_e_${item.id}_${rightEntity.id}`,
+            source: item.id,
+            target: rightEntity.id,
+            label: 'N',
+            type: 'straight',
+            animated: false,
+            data: { isStraight: true },
+          });
+        }
+      }
+    }
+
+    // Place attributes balanced above and below the entity
     if (!isRel && entityAttrMap.has(item.id)) {
       const attrs = entityAttrMap.get(item.id)!;
-      const attrCount = attrs.length;
+      const count = attrs.length;
 
-      attrs.forEach((attr, idx) => {
-        // Fan out above
-        const offset = (idx - (attrCount - 1) / 2) * 105;
-        const attrX = currentX + offset;
-        const attrY = backboneY - 120; // Positioned cleanly above
+      let topAttrs: Node[] = [];
+      let bottomAttrs: Node[] = [];
+
+      if (count <= 3) {
+        topAttrs = attrs;
+      } else {
+        const half = Math.ceil(count / 2);
+        topAttrs = attrs.slice(0, half);
+        bottomAttrs = attrs.slice(half);
+      }
+
+      // Fan out top attributes
+      const topCount = topAttrs.length;
+      topAttrs.forEach((attr, aIdx) => {
+        const offset = (aIdx - (topCount - 1) / 2) * 104;
+        const attrX = centerX + offset - 45; // Center 90px wide attribute
+        // Radial arch: outer nodes slightly lower
+        const arch = Math.abs(offset) * 0.08;
+        const attrY = backboneY - 110 + arch;
 
         placedNodes.push({
           ...attr,
-          position: { x: Math.round(attrX / 8) * 8, y: Math.round(attrY / 8) * 8 },
+          position: {
+            x: Math.round(attrX / 8) * 8,
+            y: Math.round(attrY / 8) * 8,
+          },
+          zIndex: 10,
+        });
+      });
+
+      // Fan out bottom attributes
+      const bottomCount = bottomAttrs.length;
+      bottomAttrs.forEach((attr, bIdx) => {
+        const offset = (bIdx - (bottomCount - 1) / 2) * 104;
+        const attrX = centerX + offset - 45;
+        const arch = Math.abs(offset) * 0.08;
+        const attrY = backboneY + 80 - arch;
+
+        placedNodes.push({
+          ...attr,
+          position: {
+            x: Math.round(attrX / 8) * 8,
+            y: Math.round(attrY / 8) * 8,
+          },
           zIndex: 10,
         });
       });
     }
-
-    currentX += stepX;
   });
 
   // Handle any remaining unattached nodes
   nodes.forEach((n) => {
     if (!placedNodes.some((p) => p.id === n.id)) {
+      currentCenterX += 160;
       placedNodes.push({
         ...n,
-        position: { x: currentX, y: backboneY },
+        position: { x: currentCenterX, y: backboneY },
         zIndex: 10,
       });
-      currentX += stepX;
     }
   });
 
-  // Clean, straight connections
+  // 4. Laser-straight direct connections with proper ports
   const nodeMap = new Map<string, Node>();
   placedNodes.forEach((n) => nodeMap.set(n.id, n));
 
-  const styledEdges = edges.map((edge) => {
+  const styledEdges = allEdges.map((edge) => {
     const sourceNode = nodeMap.get(edge.source);
     const targetNode = nodeMap.get(edge.target);
 
-    let sourceHandle = edge.sourceHandle;
-    let targetHandle = edge.targetHandle;
+    let sourceHandle: string | undefined;
+    let targetHandle: string | undefined;
 
-    if (sourceNode && targetNode && (!sourceHandle || !targetHandle)) {
+    if (sourceNode && targetNode) {
       const isSrcAttr = sourceNode.type?.includes('attribute');
       const isTgtAttr = targetNode.type?.includes('attribute');
 
-      if (isSrcAttr) {
-        sourceHandle = 'bottom';
-        targetHandle = 'top';
-      } else if (isTgtAttr) {
-        sourceHandle = 'top';
-        targetHandle = 'bottom';
+      if (isSrcAttr && !isTgtAttr) {
+        // Attribute is above entity
+        if (sourceNode.position.y < targetNode.position.y) {
+          sourceHandle = 'bottom';
+          targetHandle = 'top';
+        } else {
+          // Attribute is below entity
+          sourceHandle = 'top';
+          targetHandle = 'bottom';
+        }
+      } else if (!isSrcAttr && isTgtAttr) {
+        if (targetNode.position.y < sourceNode.position.y) {
+          sourceHandle = 'top';
+          targetHandle = 'bottom';
+        } else {
+          sourceHandle = 'bottom';
+          targetHandle = 'top';
+        }
       } else {
+        // Entity <-> Relationship: horizontal progression (Right to Left or Left to Right)
         const dx = targetNode.position.x - sourceNode.position.x;
-        sourceHandle = dx >= 0 ? 'right' : 'left';
-        targetHandle = dx >= 0 ? 'left' : 'right';
+        if (dx >= 0) {
+          sourceHandle = 'right';
+          targetHandle = 'left';
+        } else {
+          sourceHandle = 'left';
+          targetHandle = 'right';
+        }
       }
     }
 
     return {
       ...edge,
-      sourceHandle: sourceHandle || 'bottom',
-      targetHandle: targetHandle || 'top',
+      sourceHandle: sourceHandle || 'right',
+      targetHandle: targetHandle || 'left',
       type: 'straight',
       data: {
         ...edge.data,
         isStraight: true,
       },
-      animated: edge.animated ?? false,
+      animated: false,
       style: edge.style || { stroke: '#71717a', strokeWidth: 2 },
     };
   });
