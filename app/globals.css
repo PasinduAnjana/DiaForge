@@ -1,8 +1,24 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+.react-flow__node:not(.selected) .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.is-connecting .react-flow__handle {
+  opacity: 1 !important;
+  pointer-events: all !important;
+}
+
+.react-flow__handle {
+  transition: opacity 0.2s ease;
 }
 
 @theme inline {
