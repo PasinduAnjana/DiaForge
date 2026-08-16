@@ -211,6 +211,7 @@ export const Sidebar = () => {
         <p>• <strong>Double-click</strong> node to edit label</p>
         <p>• <strong>Delete / Backspace</strong> to remove</p>
         <p>• <strong>R</strong> to rotate orientation</p>
+        <p>• <strong>Ctrl + S</strong> to save .diaflow file</p>
         <p>• <strong>Resize</strong> handles on selection</p>
       </div>
     </aside>
