@@ -1,7 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { GripVertical, Search, X } from 'lucide-react';
-import { NODE_REGISTRY, NODE_CATEGORIES } from './nodes/registry';
+import { GripVertical, Search, X, Database, Cloud, GitBranch } from 'lucide-react';
+import { NODE_REGISTRY } from './nodes/registry';
 import { NodeCategory, NodeDefinition } from './nodes/types';
+import { DiagramType } from '@/schemas/diagram.schema';
+
+interface SidebarProps {
+  diagramType?: DiagramType;
+  onChangeDiagramType?: () => void;
+}
 
 const COLOR_THEME_CLASSES: Record<
   string,
@@ -53,12 +59,21 @@ const COLOR_THEME_CLASSES: Record<
   },
   zinc: {
     icon: 'text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300',
-    hoverBorder: 'hover:border-zinc-400 dark:hover:border-zinc-600',
+    hoverBorder: 'hover:border-zinc-400 dark:border-zinc-600',
     hoverBg: 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50',
   },
 };
 
-export const Sidebar = () => {
+const DIAGRAM_TYPE_LABELS: Record<DiagramType, { name: string; icon: any; color: string }> = {
+  system_design: { name: 'System Design', icon: Cloud, color: 'text-indigo-600 dark:text-indigo-400' },
+  erd: { name: 'ER Diagram (Chen)', icon: Database, color: 'text-emerald-600 dark:text-emerald-400' },
+  flowchart: { name: 'Flowchart', icon: GitBranch, color: 'text-amber-600 dark:text-amber-400' },
+};
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  diagramType = 'system_design',
+  onChangeDiagramType,
+}) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -67,8 +82,35 @@ export const Sidebar = () => {
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const filteredNodes = useMemo(() => {
+  // 1. Filter nodes strictly by active diagramType
+  const relevantNodes = useMemo(() => {
     return NODE_REGISTRY.filter((node) => {
+      if (diagramType === 'erd') {
+        // Show only ER Diagram symbols and general notes
+        return node.category === 'ER Diagram' || node.type === 'note';
+      }
+      if (diagramType === 'flowchart') {
+        // Show only flowchart shapes and general notes
+        return node.category === 'Flowchart' || node.type === 'note';
+      }
+      // System Design: Show compute, db, network, general (hide ERD & flowchart-specific nodes)
+      return (
+        node.category !== 'ER Diagram' &&
+        node.category !== 'Flowchart'
+      );
+    });
+  }, [diagramType]);
+
+  // 2. Active categories for this diagramType
+  const activeCategories = useMemo(() => {
+    const set = new Set<NodeCategory>();
+    relevantNodes.forEach((n) => set.add(n.category));
+    return Array.from(set);
+  }, [relevantNodes]);
+
+  // 3. Search and category filter
+  const filteredNodes = useMemo(() => {
+    return relevantNodes.filter((node) => {
       const matchesSearch =
         node.label.toLowerCase().includes(search.toLowerCase()) ||
         node.category.toLowerCase().includes(search.toLowerCase()) ||
@@ -79,7 +121,7 @@ export const Sidebar = () => {
 
       return matchesSearch && matchesCategory;
     });
-  }, [search, selectedCategory]);
+  }, [relevantNodes, search, selectedCategory]);
 
   const groupedNodes = useMemo(() => {
     if (selectedCategory !== 'All' || search.trim() !== '') {
@@ -87,23 +129,40 @@ export const Sidebar = () => {
     }
 
     const groups: Partial<Record<NodeCategory, NodeDefinition[]>> = {};
-    for (const cat of NODE_CATEGORIES) {
-      const items = NODE_REGISTRY.filter((n) => n.category === cat);
+    for (const cat of activeCategories) {
+      const items = relevantNodes.filter((n) => n.category === cat);
       if (items.length > 0) {
         groups[cat] = items;
       }
     }
     return groups;
-  }, [filteredNodes, selectedCategory, search]);
+  }, [filteredNodes, selectedCategory, search, activeCategories, relevantNodes]);
+
+  const typeInfo = DIAGRAM_TYPE_LABELS[diagramType] || DIAGRAM_TYPE_LABELS.system_design;
+  const TypeIcon = typeInfo.icon;
 
   return (
     <aside className="w-72 bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 flex flex-col text-zinc-700 dark:text-zinc-300 z-10 relative shadow-xl dark:shadow-black/50 transition-colors h-full min-h-0 shrink-0">
-      {/* Header & Search */}
+      {/* Header with Mode Switcher & Search */}
       <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col gap-3 shrink-0">
+        {/* Active Domain Tag */}
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-            Components ({NODE_REGISTRY.length})
-          </h2>
+          <button
+            type="button"
+            onClick={onChangeDiagramType}
+            className="flex items-center gap-2 px-2 py-1 -ml-1 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors cursor-pointer group text-left"
+            title="Click to switch diagram type"
+          >
+            <TypeIcon size={16} className={typeInfo.color} />
+            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:underline">
+              {typeInfo.name}
+            </span>
+            <span className="text-[10px] text-zinc-400">▾</span>
+          </button>
+
+          <span className="text-[11px] font-semibold text-zinc-400">
+            {relevantNodes.length} symbols
+          </span>
         </div>
 
         {/* Search Bar */}
@@ -111,7 +170,7 @@ export const Sidebar = () => {
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
-            placeholder="Search nodes..."
+            placeholder={`Search ${typeInfo.name.toLowerCase()} symbols...`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-8 pr-7 py-1.5 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 transition-colors text-zinc-800 dark:text-zinc-200"
@@ -126,25 +185,27 @@ export const Sidebar = () => {
           )}
         </div>
 
-        {/* Category Pills (Horizontal Scroll) */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
-          {['All', ...NODE_CATEGORIES].map((cat) => {
-            const isSelected = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-2.5 py-1 rounded-full whitespace-nowrap transition-colors font-medium shrink-0 ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                    : 'bg-zinc-200/70 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300/70 dark:hover:bg-zinc-700'
-                }`}
-              >
-                {cat}
-              </button>
-            );
-          })}
-        </div>
+        {/* Category Pills (Horizontal Scroll) if more than 1 category */}
+        {activeCategories.length > 1 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
+            {['All', ...activeCategories].map((cat) => {
+              const isSelected = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-2.5 py-1 rounded-full whitespace-nowrap transition-colors font-medium shrink-0 ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                      : 'bg-zinc-200/70 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300/70 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Node Palette List (Scrollable) */}

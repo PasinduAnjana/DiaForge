@@ -7,7 +7,8 @@ export type NodeCategory =
   | 'Compute'
   | 'Database & Storage'
   | 'Network & Security'
-  | 'Flowchart';
+  | 'Flowchart'
+  | 'ER Diagram';
 
 export interface DiaFlowNodeData {
   label: string;

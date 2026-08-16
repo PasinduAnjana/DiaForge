@@ -97,9 +97,13 @@ export const ViewportSchema = z.object({
   zoom: z.number(),
 });
 
+export const DiagramTypeSchema = z.enum(['system_design', 'erd', 'flowchart']);
+export type DiagramType = z.infer<typeof DiagramTypeSchema>;
+
 export const DiaFlowDocumentSchema = z.object({
   version: z.string().default('1.0'),
   name: z.string().default('Untitled Architecture'),
+  diagramType: DiagramTypeSchema.optional().default('system_design'),
   lastModified: z.string().optional(),
   nodes: z.array(DiaFlowNodeSchema).default([]),
   edges: z.array(DiaFlowEdgeSchema).default([]),
@@ -129,6 +133,7 @@ export const AIGeneratedEdgeSchema = z.object({
 export const AIGeneratedDiagramSchema = z.object({
   name: z.string().default('AI Architecture'),
   summary: z.string().default(''),
+  diagramType: DiagramTypeSchema.optional().default('system_design'),
   nodes: z.array(AIGeneratedNodeSchema).min(1, 'Diagram must contain at least 1 node'),
   edges: z.array(AIGeneratedEdgeSchema).default([]),
 });
@@ -144,6 +149,7 @@ export const AIClientConfigSchema = z.object({
 export interface DiaFlowDocument {
   version: string;
   name: string;
+  diagramType?: DiagramType;
   lastModified?: string;
   nodes: Node[];
   edges: Edge[];

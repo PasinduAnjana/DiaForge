@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, X, Wand2, Loader2, ArrowRight, Lightbulb, KeyRound } from 'lucide-react';
+import {
+  Sparkles,
+  X,
+  Wand2,
+  Loader2,
+  ArrowRight,
+  Lightbulb,
+  KeyRound,
+  Cloud,
+  Database,
+  GitBranch,
+} from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { getLayoutedElements } from '@/utils/autoLayout';
-
 import { AIClientConfig, PROVIDER_DEFAULTS } from '@/utils/aiClient';
+import { DiagramType } from '@/schemas/diagram.schema';
 
 interface AIPromptModalProps {
   isOpen: boolean;
@@ -15,10 +26,33 @@ interface AIPromptModalProps {
 }
 
 const VALID_NODE_TYPES = new Set([
-  'custom', 'container', 'note', 'server', 'cloud', 'microservice',
-  'function', 'api', 'database', 'cache', 'storage', 'queue',
-  'router', 'loadbalancer', 'firewall', 'auth', 'flow_process',
-  'flow_decision', 'flow_terminal'
+  'custom',
+  'container',
+  'note',
+  'server',
+  'cloud',
+  'microservice',
+  'function',
+  'api',
+  'database',
+  'cache',
+  'storage',
+  'queue',
+  'router',
+  'loadbalancer',
+  'firewall',
+  'auth',
+  'flow_process',
+  'flow_decision',
+  'flow_terminal',
+  'erd_entity',
+  'erd_weak_entity',
+  'erd_relationship',
+  'erd_weak_relationship',
+  'erd_attribute',
+  'erd_key_attribute',
+  'erd_multivalued_attribute',
+  'erd_derived_attribute',
 ]);
 
 const TYPE_MAP: Record<string, { type: string; defaultIcon?: string }> = {
@@ -42,6 +76,14 @@ const TYPE_MAP: Record<string, { type: string; defaultIcon?: string }> = {
   decision: { type: 'flow_decision' },
   process: { type: 'flow_process' },
   terminal: { type: 'flow_terminal' },
+  entity: { type: 'erd_entity' },
+  weak_entity: { type: 'erd_weak_entity' },
+  relationship: { type: 'erd_relationship' },
+  weak_relationship: { type: 'erd_weak_relationship' },
+  attribute: { type: 'erd_attribute' },
+  key_attribute: { type: 'erd_key_attribute' },
+  multivalued_attribute: { type: 'erd_multivalued_attribute' },
+  derived_attribute: { type: 'erd_derived_attribute' },
 };
 
 function normalizeNodeType(rawType: string, label: string, providedIcon?: string): { type: string; iconName?: string } {
@@ -81,28 +123,64 @@ function normalizeNodeType(rawType: string, label: string, providedIcon?: string
   };
 }
 
-const PRESET_PROMPTS = [
-  {
-    title: 'AWS E-Commerce Platform',
-    desc: 'CloudFront, Router Gateway, Auth, Microservices, Redis, SQL DB, Queue, Stripe',
-    prompt: 'A modern scalable AWS E-Commerce platform with CloudFront CDN, API Router Gateway, Auth IAM, Order and Product microservices, Redis cache, SQL Database, Message Queue for order processing, and Stripe payments integration.',
-  },
-  {
-    title: 'Real-Time Event Streaming',
-    desc: 'IoT Ingest, Queue Event Bus, Workers, Storage, Redis, Web Dashboard',
-    prompt: 'A high-throughput real-time event streaming pipeline with IoT devices, Message Queue event bus, serverless function workers, object storage, Redis cache, and live Web Client dashboard.',
-  },
-  {
-    title: 'Enterprise Serverless Stack',
-    desc: 'Web App, API Gateway, Lambda Functions, SQL Database, S3 Storage, Auth',
-    prompt: 'A full-stack serverless architecture with Web Client, Router API Gateway, Serverless Functions, SQL Database, Object Storage bucket, and Auth provider.',
-  },
-  {
-    title: 'Microservices Backend',
-    desc: 'Load Balancer, Auth Service, User Microservice, Payment Service, Queue, Database',
-    prompt: 'A microservices cluster with Load Balancer, Auth service, User and Order microservices, Message Queue broker, SQL Database, and Stripe payment processor.',
-  },
-];
+const PRESETS_BY_TYPE: Record<DiagramType, Array<{ title: string; desc: string; prompt: string }>> = {
+  system_design: [
+    {
+      title: 'AWS E-Commerce Platform',
+      desc: 'CloudFront, API Gateway, Auth, Microservices, Redis, SQL DB, Queue, Stripe',
+      prompt: 'A modern scalable AWS E-Commerce platform with CloudFront CDN, API Gateway, Auth IAM, Order and Product microservices, Redis cache, PostgreSQL DB, SQS Message Queue for order processing, and Stripe payments.',
+    },
+    {
+      title: 'Real-Time Event Streaming',
+      desc: 'IoT Ingest, Kafka Event Bus, Workers, Storage, Redis, Web Dashboard',
+      prompt: 'A high-throughput real-time event streaming pipeline with IoT devices, Kafka Event Bus, serverless function workers, S3 object storage, Redis cache, and live Web Client dashboard.',
+    },
+    {
+      title: 'Enterprise Serverless Stack',
+      desc: 'Web App, API Gateway, Lambda Functions, SQL Database, S3 Storage, Auth',
+      prompt: 'A full-stack serverless architecture with Web Client, Router API Gateway, Serverless Lambda Functions, PostgreSQL Database, Object Storage bucket, and Auth provider.',
+    },
+    {
+      title: 'Microservices Backend',
+      desc: 'Load Balancer, Auth Service, User Microservice, Payment Service, Queue, Database',
+      prompt: 'A microservices cluster with Load Balancer, Auth service, User and Order microservices, Message Queue broker, SQL Database, and Stripe payment processor.',
+    },
+  ],
+  erd: [
+    {
+      title: 'Banking: Customer & Loan ERD',
+      desc: 'Customer strong entity with (C_id PK, C_name) borrows Loan weak entity with (L-name, L-date)',
+      prompt: 'Peter Chen ER Diagram for Banking: Customer strong entity with attributes C_id (primary key) and C_name, connected via Borrows relationship to Loan weak entity with attributes L-name and L-date.',
+    },
+    {
+      title: 'University Course Enrollment',
+      desc: 'Student (s_id PK, name) enrolls in Course (c_code PK, title) taught by Instructor',
+      prompt: 'Peter Chen ER Diagram for a University: Student entity with s_id (PK) and name, Enrolls_In relationship (M:N) with Course entity with c_code (PK) and title, connected via Teaches relationship (1:N) to Instructor entity.',
+    },
+    {
+      title: 'E-Commerce Orders & Items',
+      desc: 'User (user_id PK) places Order (order_id PK) containing OrderItem weak entity and Product',
+      prompt: 'Peter Chen ER Diagram for E-Commerce: User entity (user_id PK, email) places Orders (order_id PK, order_date). Order has weak entity OrderItem (item_id PK, quantity) which references Product entity (prod_id PK, price).',
+    },
+    {
+      title: 'Hospital & Patient Care',
+      desc: 'Doctor (doc_id PK) examines Patient (pat_id PK) with MedicalRecord weak entity',
+      prompt: 'Peter Chen ER Diagram for Hospital: Doctor entity (doc_id PK, specialty) examines Patient entity (pat_id PK, name, phone_numbers multivalued), linked to MedicalRecord weak entity (record_no PK, diagnosis, date).',
+    },
+  ],
+  flowchart: [
+    {
+      title: 'User Authentication Flow',
+      desc: 'Start -> Enter credentials -> Validate Decision -> Success / Error -> End',
+      prompt: 'Flowchart for user login: Start -> Enter username and password -> Is password valid? -> If yes: Issue JWT token -> Redirect to dashboard -> End. If no: Show error -> Increment failure count -> End.',
+    },
+    {
+      title: 'Order Refund Processing',
+      desc: 'Start -> Receive request -> Check policy -> Process refund -> Notify -> End',
+      prompt: 'Flowchart for customer refund: Start -> Receive refund request -> Is order within 30 days? -> If yes: Approve refund -> Execute Stripe refund -> Send email -> End. If no: Reject -> Send rejection note -> End.',
+    },
+  ],
+};
 
 export const AIPromptModal: React.FC<AIPromptModalProps> = ({
   isOpen,
@@ -111,15 +189,16 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
   onOpenSettings,
   aiConfig,
 }) => {
+  const [diagramType, setDiagramType] = useState<DiagramType>('system_design');
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stepText, setStepText] = useState('Generating architecture...');
+  const [stepText, setStepText] = useState('Generating diagram...');
   const [mounted, setMounted] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeProvider = aiConfig?.provider || 'grok';
-  const activeProviderName = PROVIDER_DEFAULTS[activeProvider]?.name || 'Grok';
+  const activeProvider = aiConfig?.provider || 'groq';
+  const activeProviderName = PROVIDER_DEFAULTS[activeProvider]?.name || 'Groq';
 
   useEffect(() => {
     setMounted(true);
@@ -134,22 +213,31 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
 
   useEffect(() => {
     if (!loading) return;
-    const steps = [
-      'Analyzing system requirements...',
-      'Matching components to registered architecture types...',
-      'Establishing networking and data contracts...',
-      'Applying topological layer layout...',
-    ];
+    const steps =
+      diagramType === 'erd'
+        ? [
+            'Analyzing entity relationships & cardinality...',
+            'Constructing Peter Chen ERD entities, diamonds & attributes...',
+            'Binding primary key & multivalued attributes...',
+            'Applying orthogonal ER layout...',
+          ]
+        : [
+            'Analyzing system requirements...',
+            'Matching components to registered architecture types...',
+            'Structuring tiered VPC subnets & data paths...',
+            'Applying topological layer layout...',
+          ];
     let i = 0;
     const interval = setInterval(() => {
       i = (i + 1) % steps.length;
       setStepText(steps[i]);
-    }, 1200);
+    }, 1100);
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [loading, diagramType]);
 
-  const handleGenerate = async (targetPrompt?: string) => {
+  const handleGenerate = async (targetPrompt?: string, targetType?: DiagramType) => {
     const textToUse = targetPrompt || prompt;
+    const typeToUse = targetType || diagramType;
     if (!textToUse.trim() || loading) return;
 
     setLoading(true);
@@ -161,6 +249,7 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: textToUse.trim(),
+          diagramType: typeToUse,
           aiConfig: aiConfig || undefined,
         }),
       });
@@ -180,7 +269,7 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
           data: {
             label: n.label,
             sublabel: n.sublabel,
-            color: n.color || 'indigo',
+            color: n.color || (typeToUse === 'erd' ? 'emerald' : 'indigo'),
             iconName: normalized.iconName,
             tier: typeof n.tier === 'number' ? n.tier : undefined,
             group: n.group,
@@ -188,19 +277,19 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
         };
       });
 
-      // High-signal keywords permitted as labels (discard obvious HTTP/REST/SQL/calls/reads/writes)
-      const ALLOWED_LABEL_PATTERNS = /^(grpc|websocket|ws|pub\/sub|pubsub|webhook|cdc|sse|event|kafka|stream)$/i;
+      // High-signal keywords permitted as labels
+      const ALLOWED_LABEL_PATTERNS = /^(grpc|websocket|ws|pub\/sub|pubsub|webhook|cdc|sse|event|kafka|stream|1|m|n|0\.\.1|1\.\.1|1\.\.n|m\.\.n)$/i;
       let labeledCount = 0;
-      const MAX_LABELED_EDGES = Math.max(1, Math.floor((data.edges || []).length * 0.2));
+      const MAX_LABELED_EDGES = Math.max(2, Math.floor((data.edges || []).length * 0.35));
 
       const rawEdges: Edge[] = (data.edges || []).map((e: any) => {
         let label = (e.label || '').trim();
 
-        // Discard redundant or filler labels (HTTP, HTTPS, REST, API, read, write, query, call, data, etc.)
+        // Discard redundant or filler labels for architecture, but allow 1/M/N for ERD
         const isHighSignal = ALLOWED_LABEL_PATTERNS.test(label);
-        if (!isHighSignal || labeledCount >= MAX_LABELED_EDGES) {
+        if (typeToUse === 'system_design' && (!isHighSignal || labeledCount >= MAX_LABELED_EDGES)) {
           label = '';
-        } else {
+        } else if (label) {
           labeledCount++;
         }
 
@@ -210,14 +299,14 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
           target: e.target,
           label: label || undefined,
           type: 'smoothstep',
-          animated: e.animated ?? true,
+          animated: e.animated ?? (typeToUse === 'system_design'),
         };
       });
 
-      // Apply Dagre topological layout
+      // Apply Specialized Auto-Layout
       const layouted = getLayoutedElements(rawNodes, rawEdges, { direction: 'LR' });
 
-      onApplyDiagram(layouted.nodes, layouted.edges, data.name || 'AI Architecture', data.summary || '');
+      onApplyDiagram(layouted.nodes, layouted.edges, data.name || 'Generated Diagram', data.summary || '');
       onClose();
     } catch (err) {
       setError((err as Error).message);
@@ -227,6 +316,8 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
   };
 
   if (!isOpen || !mounted) return null;
+
+  const currentPresets = PRESETS_BY_TYPE[diagramType] || PRESETS_BY_TYPE.system_design;
 
   return createPortal(
     <div
@@ -246,17 +337,17 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                Generate Architecture with AI
+                Generate with AI
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                   {activeProviderName}
                 </span>
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Describe your system, requirements, or tech stack
+                Select your diagram type and describe requirements
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-1">
             <button
               onClick={onOpenSettings}
@@ -276,6 +367,62 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
 
         {/* Content Body */}
         <div className="p-5 space-y-4 overflow-y-auto">
+          {/* Diagram Type Selector Tabs */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+              Diagram Type
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setDiagramType('system_design')}
+                className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all ${
+                  diagramType === 'system_design'
+                    ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/30'
+                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                }`}
+              >
+                <Cloud size={16} className={diagramType === 'system_design' ? 'text-indigo-600' : 'text-zinc-400'} />
+                <div>
+                  <div className="text-xs font-bold leading-tight">System Design</div>
+                  <div className="text-[10px] text-zinc-400">Cloud, VPC, Microservices</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDiagramType('erd')}
+                className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all ${
+                  diagramType === 'erd'
+                    ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30'
+                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                }`}
+              >
+                <Database size={16} className={diagramType === 'erd' ? 'text-emerald-600' : 'text-zinc-400'} />
+                <div>
+                  <div className="text-xs font-bold leading-tight">ER Diagram</div>
+                  <div className="text-[10px] text-zinc-400">Chen Notation (PK, Weak)</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDiagramType('flowchart')}
+                className={`flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all ${
+                  diagramType === 'flowchart'
+                    ? 'border-amber-500 bg-amber-50/70 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30'
+                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                }`}
+              >
+                <GitBranch size={16} className={diagramType === 'flowchart' ? 'text-amber-600' : 'text-zinc-400'} />
+                <div>
+                  <div className="text-xs font-bold leading-tight">Flowchart</div>
+                  <div className="text-[10px] text-zinc-400">Logic & Process Flow</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* Prompt Input */}
           <div className="space-y-1.5">
             <div className="relative">
@@ -290,8 +437,14 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
                   }
                 }}
                 disabled={loading}
-                placeholder="e.g. Build a high-availability event-driven banking backend with Kafka, microservices, PostgreSQL, Redis, and Stripe checkout..."
-                className="w-full h-28 p-3.5 text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:border-indigo-500 focus:bg-white dark:focus:bg-zinc-800 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all resize-none disabled:opacity-50"
+                placeholder={
+                  diagramType === 'erd'
+                    ? 'e.g. Design a Banking ER model with Customer (C_id PK, C_name) borrowing Loan (L-name, L-date)...'
+                    : diagramType === 'flowchart'
+                    ? 'e.g. Design a user refund approval flowchart with validation checks...'
+                    : 'e.g. Build an AWS e-commerce platform with CloudFront, API Gateway, microservices, and PostgreSQL...'
+                }
+                className="w-full h-24 p-3.5 text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:border-indigo-500 focus:bg-white dark:focus:bg-zinc-800 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all resize-none disabled:opacity-50"
               />
               <div className="absolute right-3 bottom-3 text-[11px] text-zinc-400 select-none hidden sm:block">
                 Press <kbd className="px-1 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 font-mono text-[10px]">Ctrl+Enter</kbd>
@@ -317,18 +470,18 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
               <Lightbulb size={14} className="text-amber-500" />
-              <span>Or choose a reference architecture:</span>
+              <span>Reference presets for {diagramType === 'erd' ? 'ER Diagrams' : diagramType === 'flowchart' ? 'Flowcharts' : 'Architecture'}:</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {PRESET_PROMPTS.map((preset) => (
+              {currentPresets.map((preset) => (
                 <button
                   key={preset.title}
                   type="button"
                   disabled={loading}
                   onClick={() => {
                     setPrompt(preset.prompt);
-                    handleGenerate(preset.prompt);
+                    handleGenerate(preset.prompt, diagramType);
                   }}
                   className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 text-left transition-all group disabled:opacity-50 flex flex-col justify-between"
                 >
@@ -356,7 +509,7 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
                 {stepText}
               </span>
             ) : (
-              'Generates tiered nodes, services, and routed wires'
+              'Generates standard shapes, attributes, and routed connections'
             )}
           </span>
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateAICompletion, AIClientConfig } from '@/utils/aiClient';
 import { AIGeneratedDiagramSchema } from '@/schemas/diagram.schema';
 
-const SYSTEM_PROMPT = `
+const SYSTEM_PROMPT_ARCHITECTURE = `
 You are a Principal Cloud & Systems Architect for DiaFlow.
 Your job is to generate production-ready, clean, human-readable architecture diagrams with logical multi-tiered column separation and VPC grouping.
 
@@ -57,6 +57,7 @@ Return ONLY valid JSON matching this schema:
 {
   "name": "AWS E-Commerce Platform",
   "summary": "Multi-tier microservices architecture with isolated Public Ingress DMZ, Private Microservices Subnet, and Database Tier.",
+  "diagramType": "system_design",
   "nodes": [
     { "id": "client", "type": "custom", "label": "Web Client", "iconName": "Globe", "color": "blue", "tier": 0 },
     { "id": "cdn", "type": "custom", "label": "CloudFront CDN", "iconName": "Cloud", "color": "cyan", "tier": 1, "group": "Public DMZ (Ingress)" },
@@ -84,18 +85,83 @@ Return ONLY valid JSON matching this schema:
 }
 `;
 
+const SYSTEM_PROMPT_ERD = `
+You are a Database Modeling Expert specializing in Peter Chen's Official ER Diagram Notation.
+Your job is to translate database schemas and requirements into formal, beautiful Chen's ER Diagrams.
+
+CRITICAL INSTRUCTION 1 - Allowed Chen ERD Node Types:
+Use ONLY these exact ERD node types:
+- "erd_entity": Strong Entity (Single-line rectangle, e.g. Customer, Account, Employee, Student, Department)
+- "erd_weak_entity": Weak Entity (Double-line rectangle, e.g. Loan, Dependent, OrderItem)
+- "erd_relationship": Strong Relationship (Single-line Diamond, e.g. Borrows, Deposits, Works_For, Enrolls, Buys)
+- "erd_weak_relationship": Identifying Relationship for weak entities (Double-line Diamond, e.g. Has, Contains)
+- "erd_key_attribute": Primary Key attribute (Underlined Ellipse, e.g. C_id, Acc_no, Emp_id, ISBN)
+- "erd_attribute": Regular attribute (Standard Ellipse, e.g. C_name, Balance, Date, Address, Email)
+- "erd_multivalued_attribute": Multivalued attribute (Double-line Ellipse, e.g. Phone_numbers, Skills, Locations)
+- "erd_derived_attribute": Derived attribute (Dashed-line Ellipse, e.g. Age, Total_amount, Years_of_service)
+
+Color Palette Rules for Modern ERDs:
+- Strong Entities ("erd_entity"): color "indigo" or "blue"
+- Weak Entities ("erd_weak_entity"): color "purple"
+- Relationships ("erd_relationship"): color "amber"
+- Identifying Relationships ("erd_weak_relationship"): color "rose"
+- Primary Key Attributes ("erd_key_attribute"): color "emerald"
+- Regular Attributes ("erd_attribute"): color "zinc"
+- Multivalued Attributes ("erd_multivalued_attribute"): color "cyan"
+- Derived Attributes ("erd_derived_attribute"): color "amber"
+
+CRITICAL INSTRUCTION 2 - Connection Rules:
+1. Attribute -> Entity connections:
+   - Connect each attribute directly to its parent entity (no label, animated: false).
+   - e.g. { "id": "e1", "source": "attr_cid", "target": "ent_customer", "animated": false }
+2. Entity <-> Relationship connections:
+   - Connect Entities to Relationships with cardinality label ("1", "M", or "N").
+   - e.g. { "id": "e3", "source": "ent_customer", "target": "rel_borrows", "label": "1", "animated": false }
+   - e.g. { "id": "e4", "source": "rel_borrows", "target": "ent_loan", "label": "M", "animated": false }
+3. DO NOT connect Attribute to Attribute or Relationship to Relationship.
+
+Return ONLY valid JSON matching this schema:
+{
+  "name": "Banking Customer & Loan ERD",
+  "summary": "Chen's ER Model representing Customer strong entity (C_id PK, C_name) and Loan weak entity (L-name, L-date) connected through Borrows relationship.",
+  "diagramType": "erd",
+  "nodes": [
+    { "id": "attr_cid", "type": "erd_key_attribute", "label": "C_id", "color": "emerald" },
+    { "id": "attr_cname", "type": "erd_attribute", "label": "C_name", "color": "zinc" },
+    { "id": "ent_customer", "type": "erd_entity", "label": "Customer", "color": "indigo" },
+    { "id": "rel_borrows", "type": "erd_relationship", "label": "Borrows", "color": "amber" },
+    { "id": "ent_loan", "type": "erd_weak_entity", "label": "Loan", "color": "purple" },
+    { "id": "attr_lname", "type": "erd_attribute", "label": "L-name", "color": "zinc" },
+    { "id": "attr_ldate", "type": "erd_attribute", "label": "L-date", "color": "zinc" }
+  ],
+  "edges": [
+    { "id": "e1", "source": "attr_cid", "target": "ent_customer", "animated": false },
+    { "id": "e2", "source": "attr_cname", "target": "ent_customer", "animated": false },
+    { "id": "e3", "source": "ent_customer", "target": "rel_borrows", "label": "1", "animated": false },
+    { "id": "e4", "source": "rel_borrows", "target": "ent_loan", "label": "M", "animated": false },
+    { "id": "e5", "source": "attr_lname", "target": "ent_loan", "animated": false },
+    { "id": "e6", "source": "attr_ldate", "target": "ent_loan", "animated": false }
+  ]
+}
+`;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt, aiConfig } = body;
+    const { prompt, aiConfig, diagramType = 'system_design' } = body;
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
+    const systemPromptToUse =
+      diagramType === 'erd' ? SYSTEM_PROMPT_ERD : SYSTEM_PROMPT_ARCHITECTURE;
+
     const rawResponse = await generateAICompletion({
-      systemPrompt: SYSTEM_PROMPT,
-      userPrompt: `Design a clean, production-ready tiered architecture diagram for: "${prompt}"`,
+      systemPrompt: systemPromptToUse,
+      userPrompt: `Design a formal ${
+        diagramType === 'erd' ? "Peter Chen's ER Diagram" : 'tiered architecture diagram'
+      } for: "${prompt}"`,
       jsonMode: true,
       config: aiConfig as AIClientConfig,
     });
@@ -114,7 +180,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('AI generation error:', error);
     return NextResponse.json(
-      { error: (error as Error).message || 'Failed to generate architecture diagram' },
+      { error: (error as Error).message || 'Failed to generate diagram' },
       { status: 500 }
     );
   }

@@ -27,6 +27,7 @@ import { createIconCardNode } from './templates/IconCardNode';
 import { createCylinderNode } from './templates/CylinderNode';
 import { createShapeNode } from './templates/ShapeNode';
 import { createContainerNode } from './templates/ContainerNode';
+import { createERDNode } from './templates/ERDNode';
 
 // 1. Master List of Node Definitions
 export const NODE_REGISTRY: NodeDefinition[] = [
@@ -298,6 +299,112 @@ export const NODE_REGISTRY: NodeDefinition[] = [
       color: 'emerald',
     }),
   },
+
+  // --- ER Diagram (Chen's Notation) ---
+  {
+    type: 'erd_entity',
+    label: 'Strong Entity',
+    category: 'ER Diagram',
+    icon: Square,
+    color: 'indigo',
+    description: 'Independent entity rectangle',
+    component: createERDNode({
+      shape: 'entity',
+      defaultLabel: 'Entity',
+      color: 'indigo',
+    }),
+  },
+  {
+    type: 'erd_weak_entity',
+    label: 'Weak Entity',
+    category: 'ER Diagram',
+    icon: Layers,
+    color: 'purple',
+    description: 'Dependent entity double rectangle',
+    component: createERDNode({
+      shape: 'weak_entity',
+      defaultLabel: 'Weak Entity',
+      color: 'purple',
+    }),
+  },
+  {
+    type: 'erd_relationship',
+    label: 'Relationship',
+    category: 'ER Diagram',
+    icon: GitBranch,
+    color: 'amber',
+    description: 'Relationship diamond',
+    component: createERDNode({
+      shape: 'relationship',
+      defaultLabel: 'Relationship',
+      color: 'amber',
+    }),
+  },
+  {
+    type: 'erd_weak_relationship',
+    label: 'Identifying Relationship',
+    category: 'ER Diagram',
+    icon: GitBranch,
+    color: 'rose',
+    description: 'Weak relationship double diamond',
+    component: createERDNode({
+      shape: 'weak_relationship',
+      defaultLabel: 'Relates To',
+      color: 'rose',
+    }),
+  },
+  {
+    type: 'erd_key_attribute',
+    label: 'Key Attribute (PK)',
+    category: 'ER Diagram',
+    icon: KeyRound,
+    color: 'emerald',
+    description: 'Primary key underlined ellipse',
+    component: createERDNode({
+      shape: 'key_attribute',
+      defaultLabel: 'id (PK)',
+      color: 'emerald',
+    }),
+  },
+  {
+    type: 'erd_attribute',
+    label: 'Attribute',
+    category: 'ER Diagram',
+    icon: CircleDot,
+    color: 'zinc',
+    description: 'Standard attribute ellipse',
+    component: createERDNode({
+      shape: 'attribute',
+      defaultLabel: 'attribute',
+      color: 'zinc',
+    }),
+  },
+  {
+    type: 'erd_multivalued_attribute',
+    label: 'Multivalued Attribute',
+    category: 'ER Diagram',
+    icon: Layers,
+    color: 'cyan',
+    description: 'Multivalued double ellipse',
+    component: createERDNode({
+      shape: 'multivalued_attribute',
+      defaultLabel: 'multivalued',
+      color: 'cyan',
+    }),
+  },
+  {
+    type: 'erd_derived_attribute',
+    label: 'Derived Attribute',
+    category: 'ER Diagram',
+    icon: CircleDot,
+    color: 'amber',
+    description: 'Calculated dashed ellipse',
+    component: createERDNode({
+      shape: 'derived_attribute',
+      defaultLabel: 'derived',
+      color: 'amber',
+    }),
+  },
 ];
 
 // 2. Automatically derive React Flow nodeTypes map
@@ -322,6 +429,7 @@ export const NODE_CATEGORIES: NodeCategory[] = [
   'Database & Storage',
   'Network & Security',
   'Flowchart',
+  'ER Diagram',
 ];
 
 // 4. Quick Lookup Helper

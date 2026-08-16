@@ -38,7 +38,10 @@ import {
   HelpCircle,
   Sparkles,
   Bot,
-  LayoutGrid
+  LayoutGrid,
+  Database,
+  Cloud,
+  GitBranch,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import {
@@ -52,12 +55,15 @@ import { getLayoutedElements } from '@/utils/autoLayout';
 import { AIPromptModal } from './ai/AIPromptModal';
 import { AICopilotDrawer } from './ai/AICopilotDrawer';
 import { AISettingsModal } from './ai/AISettingsModal';
+import { NewDiagramModal } from './modals/NewDiagramModal';
 import { EditableEdge } from './edges/EditableEdge';
 import { AIClientConfig } from '@/utils/aiClient';
+import { DiagramType } from '@/schemas/diagram.schema';
 
 const edgeTypes = {
   default: EditableEdge,
   smoothstep: EditableEdge,
+  straight: EditableEdge,
 };
 
 let id = 0;
@@ -72,10 +78,12 @@ const DiagramFlow = () => {
   
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [diagramType, setDiagramType] = useState<DiagramType>('system_design');
   const [title, setTitle] = useState('Untitled Architecture');
   const [isSaved, setIsSaved] = useState(true);
   const [isPresenting, setIsPresenting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false);
 
   // AI States
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -199,13 +207,17 @@ const DiagramFlow = () => {
   useEffect(() => {
     setMounted(true);
     const saved = loadDiagramFromStorage();
-    if (saved) {
-      if (saved.nodes && saved.nodes.length > 0) setNodes(saved.nodes);
+    if (saved && saved.nodes && saved.nodes.length > 0) {
+      setNodes(saved.nodes);
       if (saved.edges && saved.edges.length > 0) setEdges(saved.edges);
       if (saved.name) setTitle(saved.name);
+      if (saved.diagramType) setDiagramType(saved.diagramType);
       if (saved.viewport) {
         setTimeout(() => setViewport(saved.viewport!), 50);
       }
+    } else {
+      // Prompt for Diagram Type on fresh / empty visit
+      setIsNewModalOpen(true);
     }
   }, [setNodes, setEdges, setViewport]);
 
@@ -214,11 +226,11 @@ const DiagramFlow = () => {
     if (!mounted || isPresenting) return;
     setIsSaved(false);
     const timer = setTimeout(() => {
-      saveDiagramToStorage(nodes, edges, title, getViewport());
+      saveDiagramToStorage(nodes, edges, title, getViewport(), diagramType);
       setIsSaved(true);
     }, 400);
     return () => clearTimeout(timer);
-  }, [nodes, edges, title, mounted, getViewport, isPresenting]);
+  }, [nodes, edges, title, diagramType, mounted, getViewport, isPresenting]);
 
   // 3. Global Keyboard Shortcuts
   useEffect(() => {
@@ -271,26 +283,39 @@ const DiagramFlow = () => {
       // Save shortcut (Cmd/Ctrl + S)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        exportDiagramToFile(nodes, edges, title, getViewport());
+        exportDiagramToFile(nodes, edges, title, getViewport(), diagramType);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setNodes, setEdges, nodes, edges, title, getViewport, isPresenting, enterPresentMode, exitPresentMode]);
+  }, [setNodes, setEdges, nodes, edges, title, diagramType, getViewport, isPresenting, enterPresentMode, exitPresentMode]);
 
   const onConnect = useCallback(
     (params: Edge | Connection) => {
       if (isPresenting) return;
-      setEdges((eds) => addEdge({ 
-        ...params, 
-        type: 'smoothstep', 
-        animated: true, 
-        style: { stroke: '#a1a1aa', strokeWidth: 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#a1a1aa' },
-      }, eds));
+      const isER = diagramType === 'erd';
+
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...params,
+            type: isER ? 'straight' : 'smoothstep',
+            data: {
+              ...((params as Edge).data || {}),
+              isStraight: isER,
+            },
+            animated: !isER,
+            style: { stroke: isER ? '#71717a' : '#a1a1aa', strokeWidth: 2 },
+            markerEnd: isER
+              ? undefined
+              : { type: MarkerType.ArrowClosed, color: '#a1a1aa' },
+          },
+          eds
+        )
+      );
     },
-    [setEdges, isPresenting],
+    [setEdges, isPresenting, diagramType]
   );
 
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -312,6 +337,7 @@ const DiagramFlow = () => {
             setNodes(doc.nodes || []);
             setEdges(doc.edges || []);
             if (doc.name) setTitle(doc.name);
+            if (doc.diagramType) setDiagramType(doc.diagramType);
             setTimeout(() => fitView({ padding: 0.2 }), 50);
             return;
           } catch (err) {
@@ -357,6 +383,7 @@ const DiagramFlow = () => {
       setNodes(doc.nodes || []);
       setEdges(doc.edges || []);
       if (doc.name) setTitle(doc.name);
+      if (doc.diagramType) setDiagramType(doc.diagramType);
       setTimeout(() => fitView({ padding: 0.2 }), 50);
     } catch (err) {
       alert(`Error loading diagram: ${(err as Error).message}`);
@@ -365,16 +392,27 @@ const DiagramFlow = () => {
     }
   };
 
-  // Reset / New Diagram
-  const handleNewDiagram = () => {
-    if (nodes.length > 0) {
-      const confirmed = window.confirm('Start a new diagram? Make sure to save your current work first.');
-      if (!confirmed) return;
-    }
+  // Select / Switch Diagram Type
+  const handleSelectDiagramType = (type: DiagramType, startWithAI = false) => {
+    setDiagramType(type);
     setNodes([]);
     setEdges([]);
-    setTitle('Untitled Architecture');
+    const defaultTitles: Record<DiagramType, string> = {
+      system_design: 'Untitled Architecture',
+      erd: 'Untitled Database ERD',
+      flowchart: 'Untitled Flowchart',
+    };
+    setTitle(defaultTitles[type] || 'Untitled Diagram');
+    setIsNewModalOpen(false);
     clearDiagramStorage();
+    if (startWithAI) {
+      setTimeout(() => setIsAIModalOpen(true), 120);
+    }
+  };
+
+  // Reset / New Diagram
+  const handleNewDiagram = () => {
+    setIsNewModalOpen(true);
   };
 
   const downloadImage = useCallback((format: 'png' | 'svg') => {
@@ -479,9 +517,33 @@ const DiagramFlow = () => {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="text-xs font-semibold px-2 py-1 bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 outline-none focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 dark:focus:border-indigo-400 text-zinc-700 dark:text-zinc-200 transition-colors min-w-[160px] max-w-[240px] truncate"
+                className="text-xs font-semibold px-2 py-1 bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded border border-transparent hover:border-zinc-200 dark:border-zinc-700 outline-none focus:bg-white dark:focus:bg-zinc-900 focus:border-indigo-500 dark:focus:border-indigo-400 text-zinc-700 dark:text-zinc-200 transition-colors min-w-[160px] max-w-[240px] truncate"
                 title="Click to rename diagram"
               />
+
+              {/* Diagram Domain Pill Selector */}
+              <button
+                type="button"
+                onClick={() => setIsNewModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer group"
+                title="Click to change diagram domain / start new"
+              >
+                {diagramType === 'erd' ? (
+                  <Database size={13} className="text-emerald-500" />
+                ) : diagramType === 'flowchart' ? (
+                  <GitBranch size={13} className="text-amber-500" />
+                ) : (
+                  <Cloud size={13} className="text-indigo-500" />
+                )}
+                <span>
+                  {diagramType === 'erd'
+                    ? 'ER Diagram'
+                    : diagramType === 'flowchart'
+                    ? 'Flowchart'
+                    : 'System Design'}
+                </span>
+                <span className="text-[10px] text-zinc-400">▾</span>
+              </button>
 
               {/* Auto-save indicator */}
               <span className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-400 select-none">
@@ -610,7 +672,12 @@ const DiagramFlow = () => {
     {/* Workspace Body */}
     <div className="flex flex-1 min-h-0 w-full relative overflow-hidden">
       {/* Sidebar hidden in present mode */}
-      {!isPresenting && <Sidebar />}
+      {!isPresenting && (
+        <Sidebar
+          diagramType={diagramType}
+          onChangeDiagramType={() => setIsNewModalOpen(true)}
+        />
+      )}
 
       {/* Main Flow Canvas */}
       <div className="flex-1 h-full min-h-0 w-full relative" ref={reactFlowWrapper}>
@@ -636,7 +703,13 @@ const DiagramFlow = () => {
           connectionMode={ConnectionMode.Loose}
           proOptions={{ hideAttribution: true }}
           className={`transition-colors ${isDark ? 'dark' : ''} ${isPresenting ? 'is-presenting' : ''}`}
-          defaultEdgeOptions={{ type: 'smoothstep' }}
+          defaultEdgeOptions={{
+            type: diagramType === 'erd' ? 'straight' : 'smoothstep',
+            data: { isStraight: diagramType === 'erd' },
+            animated: diagramType !== 'erd',
+            style: { stroke: diagramType === 'erd' ? '#71717a' : '#a1a1aa', strokeWidth: 2 },
+            markerEnd: diagramType === 'erd' ? undefined : { type: MarkerType.ArrowClosed, color: '#a1a1aa' },
+          }}
           deleteKeyCode={['Backspace', 'Delete']}
           onEdgeDoubleClick={(_, edge) => {
             if (isPresenting) return;
@@ -816,6 +889,14 @@ const DiagramFlow = () => {
         onClose={() => setIsSettingsOpen(false)}
         config={aiConfig}
         onSaveConfig={handleSaveAIConfig}
+      />
+
+      {/* New Diagram / Type Selector Modal */}
+      <NewDiagramModal
+        isOpen={isNewModalOpen}
+        onClose={() => setIsNewModalOpen(false)}
+        onSelectType={handleSelectDiagramType}
+        canDismiss={nodes.length > 0}
       />
     </div>
   );

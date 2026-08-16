@@ -8,6 +8,161 @@ export interface LayoutOptions {
 }
 
 /**
+ * Detects if a diagram is Peter Chen's ER Diagram notation
+ */
+export function isERDiagram(nodes: Node[]): boolean {
+  return nodes.some(
+    (n) =>
+      n.type?.startsWith('erd_') ||
+      n.data?.shape === 'entity' ||
+      n.data?.shape === 'relationship' ||
+      n.data?.shape === 'attribute'
+  );
+}
+
+/**
+ * Formats Peter Chen's ER Diagrams with entities & relationships on a central backbone
+ * and attributes clustered fanning out above/below each entity
+ */
+export function layoutERDElements(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
+  const entityNodes = nodes.filter(
+    (n) => n.type === 'erd_entity' || n.type === 'erd_weak_entity'
+  );
+  const relationshipNodes = nodes.filter(
+    (n) => n.type === 'erd_relationship' || n.type === 'erd_weak_relationship'
+  );
+  const attributeNodes = nodes.filter(
+    (n) =>
+      n.type === 'erd_attribute' ||
+      n.type === 'erd_key_attribute' ||
+      n.type === 'erd_multivalued_attribute' ||
+      n.type === 'erd_derived_attribute'
+  );
+
+  // Map each entity to its attached attributes based on edges
+  const entityAttrMap = new Map<string, Node[]>();
+  entityNodes.forEach((e) => entityAttrMap.set(e.id, []));
+
+  edges.forEach((edge) => {
+    const srcNode = nodes.find((n) => n.id === edge.source);
+    const tgtNode = nodes.find((n) => n.id === edge.target);
+
+    if (srcNode && tgtNode) {
+      if (attributeNodes.some((a) => a.id === srcNode.id) && entityAttrMap.has(tgtNode.id)) {
+        entityAttrMap.get(tgtNode.id)!.push(srcNode);
+      } else if (attributeNodes.some((a) => a.id === tgtNode.id) && entityAttrMap.has(srcNode.id)) {
+        entityAttrMap.get(srcNode.id)!.push(tgtNode);
+      }
+    }
+  });
+
+  const placedNodes: Node[] = [];
+  const startX = 60;
+  const backboneY = 220; // Center Y for Entities & Relationships
+  const stepX = 260; // Distance between Entity and Relationship
+
+  // Arrange backbone: Entity 1 -> Relationship -> Entity 2
+  let currentX = startX;
+  const backboneItems: Node[] = [];
+
+  // Interleave entities and relationships
+  const maxItems = Math.max(entityNodes.length, relationshipNodes.length);
+  for (let i = 0; i < maxItems; i++) {
+    if (i < entityNodes.length) backboneItems.push(entityNodes[i]);
+    if (i < relationshipNodes.length) backboneItems.push(relationshipNodes[i]);
+  }
+
+  backboneItems.forEach((item) => {
+    const isRel = item.type === 'erd_relationship' || item.type === 'erd_weak_relationship';
+    const posY = isRel ? backboneY - 8 : backboneY;
+
+    const placed: Node = {
+      ...item,
+      position: { x: currentX, y: posY },
+      zIndex: 10,
+    };
+    placedNodes.push(placed);
+
+    // Place attributes for entities
+    if (!isRel && entityAttrMap.has(item.id)) {
+      const attrs = entityAttrMap.get(item.id)!;
+      const attrCount = attrs.length;
+
+      attrs.forEach((attr, idx) => {
+        // Fan out above
+        const offset = (idx - (attrCount - 1) / 2) * 105;
+        const attrX = currentX + offset;
+        const attrY = backboneY - 120; // Positioned cleanly above
+
+        placedNodes.push({
+          ...attr,
+          position: { x: Math.round(attrX / 8) * 8, y: Math.round(attrY / 8) * 8 },
+          zIndex: 10,
+        });
+      });
+    }
+
+    currentX += stepX;
+  });
+
+  // Handle any remaining unattached nodes
+  nodes.forEach((n) => {
+    if (!placedNodes.some((p) => p.id === n.id)) {
+      placedNodes.push({
+        ...n,
+        position: { x: currentX, y: backboneY },
+        zIndex: 10,
+      });
+      currentX += stepX;
+    }
+  });
+
+  // Clean, straight connections
+  const nodeMap = new Map<string, Node>();
+  placedNodes.forEach((n) => nodeMap.set(n.id, n));
+
+  const styledEdges = edges.map((edge) => {
+    const sourceNode = nodeMap.get(edge.source);
+    const targetNode = nodeMap.get(edge.target);
+
+    let sourceHandle = edge.sourceHandle;
+    let targetHandle = edge.targetHandle;
+
+    if (sourceNode && targetNode && (!sourceHandle || !targetHandle)) {
+      const isSrcAttr = sourceNode.type?.includes('attribute');
+      const isTgtAttr = targetNode.type?.includes('attribute');
+
+      if (isSrcAttr) {
+        sourceHandle = 'bottom';
+        targetHandle = 'top';
+      } else if (isTgtAttr) {
+        sourceHandle = 'top';
+        targetHandle = 'bottom';
+      } else {
+        const dx = targetNode.position.x - sourceNode.position.x;
+        sourceHandle = dx >= 0 ? 'right' : 'left';
+        targetHandle = dx >= 0 ? 'left' : 'right';
+      }
+    }
+
+    return {
+      ...edge,
+      sourceHandle: sourceHandle || 'bottom',
+      targetHandle: targetHandle || 'top',
+      type: 'straight',
+      data: {
+        ...edge.data,
+        isStraight: true,
+      },
+      animated: edge.animated ?? false,
+      style: edge.style || { stroke: '#71717a', strokeWidth: 2 },
+    };
+  });
+
+  return { nodes: placedNodes, edges: styledEdges };
+}
+
+/**
  * Classifies any node into a standard 5-tier architecture column (0 to 4)
  */
 export function inferNodeTier(node: Node): number {
@@ -109,6 +264,11 @@ export const getLayoutedElements = (
   edges: Edge[],
   options: LayoutOptions = {}
 ): { nodes: Node[]; edges: Edge[] } => {
+  // If this is an ER Diagram (Chen's Notation), format with specialized ERD layout
+  if (isERDiagram(nodes)) {
+    return layoutERDElements(nodes, edges);
+  }
+
   const {
     columnGap = 160,
     rowGap = 44,

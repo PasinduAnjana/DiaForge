@@ -1,5 +1,5 @@
 import { Node, Edge, Viewport } from 'reactflow';
-import { DiaFlowDocumentSchema, DiaFlowDocument } from '@/schemas/diagram.schema';
+import { DiaFlowDocumentSchema, DiaFlowDocument, DiagramType } from '@/schemas/diagram.schema';
 
 const STORAGE_KEY = 'diaflow_saved_state';
 const TITLE_STORAGE_KEY = 'diaflow_diagram_title';
@@ -13,11 +13,13 @@ export const exportDiagramToFile = (
   nodes: Node[],
   edges: Edge[],
   diagramName: string = 'architecture-diagram',
-  viewport?: Viewport
+  viewport?: Viewport,
+  diagramType: DiagramType = 'system_design'
 ) => {
   const docData: DiaFlowDocument = {
     version: '1.0',
     name: diagramName,
+    diagramType,
     lastModified: new Date().toISOString(),
     nodes: nodes as any,
     edges: edges as any,
@@ -85,7 +87,8 @@ export const saveDiagramToStorage = (
   nodes: Node[],
   edges: Edge[],
   diagramName: string = 'Untitled Diagram',
-  viewport?: Viewport
+  viewport?: Viewport,
+  diagramType: DiagramType = 'system_design'
 ) => {
   if (typeof window === 'undefined') return;
 
@@ -93,6 +96,7 @@ export const saveDiagramToStorage = (
     const doc: DiaFlowDocument = {
       version: '1.0',
       name: diagramName,
+      diagramType,
       lastModified: new Date().toISOString(),
       nodes: nodes as any,
       edges: edges as any,

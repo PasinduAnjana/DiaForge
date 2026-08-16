@@ -3,6 +3,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getSmoothStepPath,
+  getStraightPath,
   EdgeProps,
   useReactFlow,
 } from 'reactflow';
@@ -22,15 +23,28 @@ export const EditableEdge: React.FC<EdgeProps> = ({
   selected,
 }) => {
   const { setEdges } = useReactFlow();
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 8,
-  });
+
+  const isStraight =
+    data?.isStraight ||
+    data?.edgeType === 'straight' ||
+    data?.type === 'straight';
+
+  const [edgePath, labelX, labelY] = isStraight
+    ? getStraightPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+      })
+    : getSmoothStepPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+        borderRadius: 8,
+      });
 
   const isEditingInitial = data?.isEditing || false;
   const currentLabel = label || data?.label || '';
