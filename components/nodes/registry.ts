@@ -42,9 +42,7 @@ export const NODE_REGISTRY: NodeDefinition[] = [
       icon: Box,
       defaultLabel: 'Custom Node',
       color: 'purple',
-      layout: 'vertical',
-      minWidth: 80,
-      minHeight: 80,
+      layout: 'horizontal',
     }),
   },
   {
