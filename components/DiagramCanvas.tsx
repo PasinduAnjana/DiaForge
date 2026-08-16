@@ -4,15 +4,17 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
-  useNodesState,
   useEdgesState,
+  applyNodeChanges,
+  NodeChange,
   Controls,
   Background,
   Connection,
   Edge,
   Node,
   useReactFlow,
-  MarkerType
+  MarkerType,
+  ConnectionMode
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { toPng, toSvg, toBlob } from 'html-to-image';
@@ -41,14 +43,79 @@ import {
 let id = 0;
 const getId = () => `node_${id++}_${Date.now()}`;
 
+// Threshold in pixels for connection point alignment snapping
+const PORT_ALIGN_THRESHOLD = 8;
+
 const DiagramFlow = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [title, setTitle] = useState('Untitled Architecture');
   const [isSaved, setIsSaved] = useState(true);
+
+  // Smart Alignment on Node Drag: Snaps connection ports to align horizontally/vertically
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((nds) => {
+        const nextNodes = applyNodeChanges(changes, nds);
+
+        // Check if a node position is being dragged
+        const dragChange = changes.find(
+          (c) => c.type === 'position' && (c as { dragging?: boolean }).dragging && (c as { position?: unknown }).position
+        );
+
+        if (dragChange && dragChange.type === 'position' && dragChange.position) {
+          const draggedNode = nextNodes.find((n) => n.id === dragChange.id);
+          if (draggedNode) {
+            const dX = draggedNode.position.x;
+            const dY = draggedNode.position.y;
+            const dW = (draggedNode.width as number) || 120;
+            const dH = (draggedNode.height as number) || 44;
+            const dCenterX = dX + dW / 2;
+            const dCenterY = dY + dH / 2;
+
+            let snapX = dX;
+            let snapY = dY;
+            let minDiffX = PORT_ALIGN_THRESHOLD;
+            let minDiffY = PORT_ALIGN_THRESHOLD;
+
+            for (const other of nextNodes) {
+              if (other.id === draggedNode.id) continue;
+              const oX = other.position.x;
+              const oY = other.position.y;
+              const oW = (other.width as number) || 120;
+              const oH = (other.height as number) || 44;
+              const oCenterX = oX + oW / 2;
+              const oCenterY = oY + oH / 2;
+
+              // 1. Horizontal Port Alignment (matching center Y makes horizontal wires 100% straight)
+              const diffCenterY = Math.abs(dCenterY - oCenterY);
+              if (diffCenterY < minDiffY) {
+                minDiffY = diffCenterY;
+                snapY = oCenterY - dH / 2;
+              }
+
+              // 2. Vertical Port Alignment (matching center X makes vertical wires 100% straight)
+              const diffCenterX = Math.abs(dCenterX - oCenterX);
+              if (diffCenterX < minDiffX) {
+                minDiffX = diffCenterX;
+                snapX = oCenterX - dW / 2;
+              }
+            }
+
+            if (snapX !== dX || snapY !== dY) {
+              draggedNode.position = { x: snapX, y: snapY };
+            }
+          }
+        }
+
+        return nextNodes;
+      });
+    },
+    [setNodes]
+  );
 
   const { screenToFlowPosition, fitView, getViewport, setViewport } = useReactFlow();
   const { theme, setTheme } = useTheme();
@@ -422,6 +489,8 @@ const DiagramFlow = () => {
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
             fitView
+            connectionRadius={32}
+            connectionMode={ConnectionMode.Loose}
             proOptions={{ hideAttribution: true }}
             className={`transition-colors ${isDark ? 'dark' : ''}`}
             defaultEdgeOptions={{ type: 'smoothstep' }}
