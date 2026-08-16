@@ -16,17 +16,10 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { toPng, toSvg, toBlob } from 'html-to-image';
-import { DatabaseNode, ServerNode, CustomNode } from './CustomNodes';
 import Sidebar from './Sidebar';
+import { nodeTypes, getNodeDefinition } from './nodes/registry';
 import { DownloadCloud, Sun, Moon, Copy, Check, Workflow } from 'lucide-react';
 import { useTheme } from 'next-themes';
-
-const nodeTypes = {
-  database: DatabaseNode,
-  server: ServerNode,
-  custom: CustomNode,
-  square: CustomNode,
-};
 
 let id = 0;
 const getId = () => `node_${id++}`;
@@ -103,11 +96,14 @@ const DiagramFlow = () => {
 
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
+      const nodeDef = getNodeDefinition(type);
+      const label = nodeDef ? nodeDef.label : `${type.charAt(0).toUpperCase() + type.slice(1)}`;
+
       const newNode: Node = {
         id: getId(),
         type,
         position,
-        data: { label: type === 'custom' ? 'Custom Node' : `${type.charAt(0).toUpperCase() + type.slice(1)}` },
+        data: { label },
       };
 
       setNodes((nds) => nds.concat(newNode));
@@ -225,9 +221,9 @@ const DiagramFlow = () => {
         </div>
       </header>
       
-      <div className="flex flex-1 h-full w-full relative">
+      <div className="flex flex-1 min-h-0 w-full relative overflow-hidden">
         <Sidebar />
-        <div className="flex-1 h-full w-full relative" ref={reactFlowWrapper}>
+        <div className="flex-1 h-full min-h-0 w-full relative" ref={reactFlowWrapper}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
