@@ -50,6 +50,7 @@ import {
   saveDiagramToStorage,
   loadDiagramFromStorage,
   clearDiagramStorage,
+  inferDiagramTypeFromNodes,
 } from '@/utils/diagramStorage';
 import { getLayoutedElements } from '@/utils/autoLayout';
 import { AIPromptModal } from './ai/AIPromptModal';
@@ -216,7 +217,8 @@ const DiagramFlow = () => {
       setNodes(saved.nodes);
       if (saved.edges && saved.edges.length > 0) setEdges(saved.edges);
       if (saved.name) setTitle(saved.name);
-      if (saved.diagramType) setDiagramType(saved.diagramType);
+      const resolvedType = inferDiagramTypeFromNodes(saved.nodes, saved.diagramType);
+      setDiagramType(resolvedType);
       if (saved.viewport) {
         setTimeout(() => setViewport(saved.viewport!), 50);
       }
@@ -342,7 +344,8 @@ const DiagramFlow = () => {
             setNodes(doc.nodes || []);
             setEdges(doc.edges || []);
             if (doc.name) setTitle(doc.name);
-            if (doc.diagramType) setDiagramType(doc.diagramType);
+            const resolvedType = inferDiagramTypeFromNodes(doc.nodes, doc.diagramType);
+            setDiagramType(resolvedType);
             setTimeout(() => fitView({ padding: 0.2 }), 50);
             return;
           } catch (err) {
@@ -388,7 +391,8 @@ const DiagramFlow = () => {
       setNodes(doc.nodes || []);
       setEdges(doc.edges || []);
       if (doc.name) setTitle(doc.name);
-      if (doc.diagramType) setDiagramType(doc.diagramType);
+      const resolvedType = inferDiagramTypeFromNodes(doc.nodes, doc.diagramType);
+      setDiagramType(resolvedType);
       setTimeout(() => fitView({ padding: 0.2 }), 50);
     } catch (err) {
       alert(`Error loading diagram: ${(err as Error).message}`);
@@ -560,16 +564,6 @@ const DiagramFlow = () => {
           
         {/* Right: Actions Toolbar */}
         <div className="flex items-center gap-2.5">
-          {/* AI Generate Button */}
-          <button
-            onClick={() => setIsAIModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-linear-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg transition-all shadow-sm shadow-indigo-600/30 hover:shadow-indigo-600/50 cursor-pointer"
-            title="Generate Architecture with AI (Text-to-Diagram)"
-          >
-            <Sparkles size={13} className="text-amber-300 animate-pulse" />
-            <span>AI Generate</span>
-          </button>
-
           {/* AI Copilot Drawer Toggle */}
           <button
             onClick={() => setIsCopilotOpen((prev) => !prev)}
@@ -625,7 +619,7 @@ const DiagramFlow = () => {
               <span className="hidden xl:inline">Open</span>
             </button>
             <button
-              onClick={() => exportDiagramToFile(nodes, edges, title, getViewport())}
+              onClick={() => exportDiagramToFile(nodes, edges, title, getViewport(), diagramType)}
               className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-white dark:hover:bg-zinc-800 rounded-md transition-colors font-semibold cursor-pointer"
               title="Save Diagram (.diaflow)"
             >
@@ -874,6 +868,7 @@ const DiagramFlow = () => {
     {/* AI Prompt Modal (Text-to-Diagram) */}
     <AIPromptModal
       isOpen={isAIModalOpen}
+      diagramType={diagramType}
       onClose={() => setIsAIModalOpen(false)}
       onApplyDiagram={(newNodes, newEdges, newTitle, summary) => {
         setNodes(newNodes);
@@ -901,7 +896,6 @@ const DiagramFlow = () => {
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
         onSelectType={handleSelectDiagramType}
-        canDismiss={nodes.length > 0}
       />
     </div>
   );

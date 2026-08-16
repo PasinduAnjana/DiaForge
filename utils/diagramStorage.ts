@@ -42,6 +42,30 @@ export const exportDiagramToFile = (
 };
 
 /**
+ * Intelligently infers diagram type based on node types if diagramType is missing or mismatched
+ */
+export function inferDiagramTypeFromNodes(nodes: Node[] = [], fallbackType?: DiagramType): DiagramType {
+  if (
+    nodes.some(
+      (n) =>
+        n.type?.startsWith('erd_') ||
+        n.data?.shape === 'entity' ||
+        n.data?.shape === 'relationship' ||
+        n.data?.shape === 'attribute'
+    )
+  ) {
+    return 'erd';
+  }
+  if (nodes.some((n) => n.type?.startsWith('flow_'))) {
+    return 'flowchart';
+  }
+  if (fallbackType && ['system_design', 'erd', 'flowchart'].includes(fallbackType)) {
+    return fallbackType;
+  }
+  return 'system_design';
+}
+
+/**
  * Validates and parses raw JSON string into DiaFlowDocument using Zod schema
  */
 export const parseDiagramJSON = (jsonString: string): DiaFlowDocument => {
@@ -54,7 +78,9 @@ export const parseDiagramJSON = (jsonString: string): DiaFlowDocument => {
       throw new Error(`Diagram validation failed: ${errorMsg}`);
     }
 
-    return result.data as unknown as DiaFlowDocument;
+    const doc = result.data as unknown as DiaFlowDocument;
+    doc.diagramType = inferDiagramTypeFromNodes(doc.nodes || [], doc.diagramType);
+    return doc;
   } catch (error) {
     throw new Error(`Failed to parse diagram JSON: ${(error as Error).message}`);
   }
