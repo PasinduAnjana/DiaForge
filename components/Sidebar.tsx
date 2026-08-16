@@ -51,9 +51,12 @@ const Sidebar = () => {
         </div>
       </div>
       
-      <div className="mt-auto pt-4 border-t border-zinc-200 dark:border-zinc-800/50 text-xs text-zinc-500 leading-relaxed">
-        <p>Drag elements from this panel onto the canvas to create your architecture diagram.</p>
-        <p className="mt-2">Connect nodes by dragging between handles.</p>
+      <div className="mt-auto pt-4 border-t border-zinc-200 dark:border-zinc-800/50 text-xs text-zinc-500 leading-relaxed space-y-1.5">
+        <p>• <strong>Drag & drop</strong> to add nodes</p>
+        <p>• <strong>Connect</strong> handles for edges</p>
+        <p>• <strong>Double-click</strong> node to edit label</p>
+        <p>• <strong>Delete / Backspace</strong> to remove</p>
+        <p>• <strong>R</strong> key to rotate orientation</p>
       </div>
     </aside>
   );

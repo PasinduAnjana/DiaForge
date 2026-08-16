@@ -47,6 +47,16 @@ const DiagramFlow = () => {
       // Ignore if typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        setNodes((nds) => {
+          const selectedNodeIds = new Set(nds.filter((n) => n.selected).map((n) => n.id));
+          if (selectedNodeIds.size === 0) return nds;
+          
+          setEdges((eds) => eds.filter((edge) => !selectedNodeIds.has(edge.source) && !selectedNodeIds.has(edge.target) && !edge.selected));
+          return nds.filter((n) => !n.selected);
+        });
+      }
+
       if (e.key.toLowerCase() === 'r') {
         setNodes((nds) => nds.map(node => {
           if (node.selected) {
@@ -66,7 +76,7 @@ const DiagramFlow = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setNodes]);
+  }, [setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge({ 
@@ -233,6 +243,7 @@ const DiagramFlow = () => {
             proOptions={{ hideAttribution: true }}
             className={`transition-colors ${isDark ? 'dark' : ''}`}
             defaultEdgeOptions={{ type: 'smoothstep' }}
+            deleteKeyCode={['Backspace', 'Delete']}
           >
             <Background color={isDark ? '#3f3f46' : '#d4d4d8'} gap={20} size={1} />
             <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />
