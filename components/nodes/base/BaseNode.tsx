@@ -110,19 +110,15 @@ export const BaseNode = ({
   className = '',
   children,
   showHandles = true,
-  targetPosition,
-  sourcePosition,
 }: BaseNodeProps) => {
   const updateNodeInternals = useUpdateNodeInternals();
-  const isHorizontal = orientation === 'horizontal';
+  const theme = COLOR_MAP[color] || COLOR_MAP.indigo;
 
   useEffect(() => {
     updateNodeInternals(id);
-  }, [isHorizontal, id, updateNodeInternals]);
+  }, [id, updateNodeInternals]);
 
-  const targetPos = targetPosition || (isHorizontal ? Position.Left : Position.Top);
-  const sourcePos = sourcePosition || (isHorizontal ? Position.Right : Position.Bottom);
-  const theme = COLOR_MAP[color] || COLOR_MAP.indigo;
+  const handleClass = `!w-2.5 !h-2.5 ${theme.handleBg} !border-2 !border-white dark:!border-zinc-900 z-40 rounded-full`;
 
   return (
     <>
@@ -141,22 +137,26 @@ export const BaseNode = ({
         className={`relative w-full h-full transition-all ${className}`}
       >
         {showHandles && (
-          <Handle
-            type="target"
-            position={targetPos}
-            className={`!w-3 !h-3 ${theme.handleBg} !border-none z-40`}
-          />
+          <>
+            {/* Top Handle */}
+            <Handle type="target" position={Position.Top} id="top-target" className={handleClass} />
+            <Handle type="source" position={Position.Top} id="top-source" className={handleClass} />
+
+            {/* Right Handle */}
+            <Handle type="target" position={Position.Right} id="right-target" className={handleClass} />
+            <Handle type="source" position={Position.Right} id="right-source" className={handleClass} />
+
+            {/* Bottom Handle */}
+            <Handle type="target" position={Position.Bottom} id="bottom-target" className={handleClass} />
+            <Handle type="source" position={Position.Bottom} id="bottom-source" className={handleClass} />
+
+            {/* Left Handle */}
+            <Handle type="target" position={Position.Left} id="left-target" className={handleClass} />
+            <Handle type="source" position={Position.Left} id="left-source" className={handleClass} />
+          </>
         )}
         
         {children}
-
-        {showHandles && (
-          <Handle
-            type="source"
-            position={sourcePos}
-            className={`!w-3 !h-3 ${theme.handleBg} !border-none z-40`}
-          />
-        )}
       </div>
     </>
   );

@@ -86,13 +86,21 @@ const DiagramFlow = () => {
       // Ignore if typing in an input or textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      // Delete Node(s)
+      // Delete Node(s) or Edge(s)
       if (e.key === 'Delete' || e.key === 'Backspace') {
         setNodes((nds) => {
           const selectedNodeIds = new Set(nds.filter((n) => n.selected).map((n) => n.id));
-          if (selectedNodeIds.size === 0) return nds;
           
-          setEdges((eds) => eds.filter((edge) => !selectedNodeIds.has(edge.source) && !selectedNodeIds.has(edge.target) && !edge.selected));
+          setEdges((eds) =>
+            eds.filter(
+              (edge) =>
+                !edge.selected &&
+                !selectedNodeIds.has(edge.source) &&
+                !selectedNodeIds.has(edge.target)
+            )
+          );
+
+          if (selectedNodeIds.size === 0) return nds;
           return nds.filter((n) => !n.selected);
         });
       }
@@ -418,6 +426,7 @@ const DiagramFlow = () => {
             className={`transition-colors ${isDark ? 'dark' : ''}`}
             defaultEdgeOptions={{ type: 'smoothstep' }}
             deleteKeyCode={['Backspace', 'Delete']}
+            onEdgeDoubleClick={(_, edge) => setEdges((eds) => eds.filter((e) => e.id !== edge.id))}
           >
             <Background color={isDark ? '#3f3f46' : '#d4d4d8'} gap={20} size={1} />
             <Controls className="!bg-white dark:!bg-zinc-900 !border-zinc-200 dark:!border-zinc-800 !fill-zinc-600 dark:!fill-zinc-400 !text-zinc-600 dark:!text-zinc-400 shadow-xl" showInteractive={false} />

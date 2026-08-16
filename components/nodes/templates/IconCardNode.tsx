@@ -59,24 +59,24 @@ export const createIconCardNode = ({
         onDoubleClick={() => setIsEditing(true)}
       >
         <div
-          className={`w-full h-full shadow-md rounded-lg bg-white dark:bg-zinc-900 border-2 transition-colors ${
+          className={`w-full h-full shadow-md rounded-lg bg-white dark:bg-zinc-900 border-2 transition-colors flex items-center justify-center p-3 gap-2.5 ${
             selected ? themeStyles.border : 'border-zinc-300 dark:border-zinc-700'
           } ${
             isHorizontalLayout
-              ? 'px-3.5 py-2 flex items-center gap-2.5 min-w-[120px] min-h-[44px]'
-              : 'p-3 flex flex-col items-center justify-center gap-2 min-w-[80px] min-h-[80px]'
+              ? 'flex-row min-w-[120px] min-h-[44px]'
+              : 'flex-col min-w-[80px] min-h-[80px]'
           }`}
         >
           <DefaultIcon size={isHorizontalLayout ? 18 : 22} className={`${themeStyles.iconColor} shrink-0`} />
-          <div className={`${isHorizontalLayout ? 'flex-1 min-w-0' : 'w-full flex justify-center'}`}>
+          <div className="flex items-center justify-center min-w-0 max-w-full">
             <EditableLabel
               id={id}
               initialLabel={data?.label}
               defaultLabel={defaultLabel}
               isEditing={isEditing}
               setIsEditing={setIsEditing}
-              className={`text-zinc-800 dark:text-zinc-100 ${isHorizontalLayout ? 'text-left' : 'text-center w-full'}`}
-              inputClassName={isHorizontalLayout ? 'text-left w-full' : 'text-center w-full'}
+              className="text-zinc-800 dark:text-zinc-100 text-center font-medium truncate"
+              inputClassName="text-center w-full font-medium"
             />
           </div>
         </div>

@@ -208,11 +208,11 @@ export const Sidebar = () => {
         <div className="font-semibold text-zinc-600 dark:text-zinc-300 text-[11px] mb-1">
           Quick Shortcuts
         </div>
+        <p>• <strong>4-way ports</strong> on hover to connect</p>
         <p>• <strong>Double-click</strong> node to edit label</p>
         <p>• <strong>Delete / Backspace</strong> to remove</p>
-        <p>• <strong>R</strong> to rotate orientation</p>
+        <p>• <strong>Double-click edge</strong> to delete line</p>
         <p>• <strong>Ctrl + S</strong> to save .diaflow file</p>
-        <p>• <strong>Resize</strong> handles on selection</p>
       </div>
     </aside>
   );
