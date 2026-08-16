@@ -2,12 +2,15 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import { ALL_LUCIDE_ICONS, CURATED_ICON_LIST, IconItem } from './iconRegistry';
+import { NodeColorTheme } from '../base/BaseNode';
 
 interface IconPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectIcon: (iconName: string) => void;
   currentIconName?: string;
+  currentColor?: string;
+  onSelectColor?: (color: NodeColorTheme) => void;
 }
 
 const CATEGORIES = [
@@ -22,11 +25,25 @@ const CATEGORIES = [
   'Monitoring',
 ];
 
+const COLOR_OPTIONS: { name: NodeColorTheme; label: string; bg: string }[] = [
+  { name: 'indigo', label: 'Indigo', bg: 'bg-indigo-500' },
+  { name: 'purple', label: 'Purple', bg: 'bg-purple-500' },
+  { name: 'blue', label: 'Blue', bg: 'bg-blue-500' },
+  { name: 'cyan', label: 'Cyan', bg: 'bg-cyan-500' },
+  { name: 'emerald', label: 'Emerald', bg: 'bg-emerald-500' },
+  { name: 'green', label: 'Green', bg: 'bg-green-500' },
+  { name: 'amber', label: 'Amber', bg: 'bg-amber-500' },
+  { name: 'rose', label: 'Rose', bg: 'bg-rose-500' },
+  { name: 'zinc', label: 'Zinc', bg: 'bg-zinc-500' },
+];
+
 export const IconPickerModal: React.FC<IconPickerModalProps> = ({
   isOpen,
   onClose,
   onSelectIcon,
   currentIconName,
+  currentColor = 'indigo',
+  onSelectColor,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -96,10 +113,10 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
           <div>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Select Icon
+              Customize Node
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Pick an icon for this component
+              Choose icon and color theme
             </p>
           </div>
           <button
@@ -110,6 +127,28 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
           </button>
         </div>
 
+        {/* Color Palette Selector */}
+        {onSelectColor && (
+          <div className="px-4 py-2.5 bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+            <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">Color Theme</span>
+            <div className="flex items-center gap-1.5">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => onSelectColor(c.name)}
+                  title={c.label}
+                  className={`w-5 h-5 rounded-full transition-all cursor-pointer ${c.bg} ${
+                    currentColor === c.name
+                      ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-zinc-900 scale-110'
+                      : 'hover:scale-115 opacity-80 hover:opacity-100'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Search Input */}
         <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
           <div className="relative flex items-center">
@@ -117,7 +156,7 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search icons (e.g. database, stripe, lock, cloud)..."
+              placeholder="Search 1,000+ icons (e.g. database, stripe, lock, cloud)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg outline-none focus:border-indigo-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 transition-colors"
@@ -150,7 +189,7 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-6 sm:grid-cols-7 gap-2">
-              {filteredIcons.map((item) => {
+              {filteredIcons.map((item: IconItem) => {
                 const IconComponent = item.icon;
                 const isSelected = currentIconName === item.name;
 

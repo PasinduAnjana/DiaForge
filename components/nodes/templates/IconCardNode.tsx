@@ -78,6 +78,26 @@ export const createIconCardNode = ({
       [id, setNodes]
     );
 
+    const handleSelectColor = useCallback(
+      (newColor: NodeColorTheme) => {
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id === id) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  color: newColor,
+                },
+              };
+            }
+            return node;
+          })
+        );
+      },
+      [id, setNodes]
+    );
+
     return (
       <>
         <BaseNode
@@ -106,7 +126,7 @@ export const createIconCardNode = ({
                 setIsPickerOpen(true);
               }}
               className="p-1 -m-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center cursor-pointer group/icon"
-              title="Click to change icon"
+              title="Click to customize icon and color"
             >
               <ActiveIcon
                 size={isHorizontalLayout ? 18 : 22}
@@ -128,12 +148,14 @@ export const createIconCardNode = ({
           </div>
         </BaseNode>
 
-        {/* Searchable Icon Picker Modal */}
+        {/* Searchable Icon & Color Picker Modal */}
         <IconPickerModal
           isOpen={isPickerOpen}
           onClose={() => setIsPickerOpen(false)}
           onSelectIcon={handleSelectIcon}
           currentIconName={data?.iconName}
+          currentColor={nodeColor}
+          onSelectColor={handleSelectColor}
         />
       </>
     );
