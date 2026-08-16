@@ -34,7 +34,8 @@ export const createContainerNode = ({
               : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100/40 dark:bg-zinc-900/30'
           }`}
         >
-          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800/60 w-full">
+          {/* Header (interactive for selecting/moving container and editing label) */}
+          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800/60 w-full pointer-events-auto cursor-grab active:cursor-grabbing select-none">
             <Layers size={15} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <EditableLabel
@@ -48,6 +49,8 @@ export const createContainerNode = ({
               />
             </div>
           </div>
+          {/* Inner area is transparent to pointer events so nodes inside can be clicked & dragged */}
+          <div className="flex-1 w-full pointer-events-none" />
         </div>
       </BaseNode>
     );

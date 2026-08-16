@@ -99,14 +99,21 @@ const DiagramFlow = () => {
       const nodeDef = getNodeDefinition(type);
       const label = nodeDef ? nodeDef.label : `${type.charAt(0).toUpperCase() + type.slice(1)}`;
 
+      const isContainer = type === 'container';
       const newNode: Node = {
         id: getId(),
         type,
         position,
+        zIndex: isContainer ? -1 : 1,
         data: { label },
       };
 
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds) => {
+        if (isContainer) {
+          return [newNode, ...nds];
+        }
+        return nds.concat(newNode);
+      });
     },
     [screenToFlowPosition, setNodes],
   );
