@@ -14,7 +14,8 @@ import ReactFlow, {
   Node,
   useReactFlow,
   MarkerType,
-  ConnectionMode
+  ConnectionMode,
+  SelectionMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { toPng, toSvg, toBlob } from 'html-to-image';
@@ -147,18 +148,19 @@ const DiagramFlow = () => {
     setIsPresenting(false);
   }, []);
 
-  // Smart Alignment on Node Drag: Snaps connection ports to align horizontally/vertically
+  // Smart Alignment on Node Drag: Snaps connection ports when dragging a single node
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((nds) => {
         const nextNodes = applyNodeChanges(changes, nds);
 
-        // Check if a node position is being dragged
-        const dragChange = changes.find(
+        const posChanges = changes.filter(
           (c) => c.type === 'position' && (c as { dragging?: boolean }).dragging && (c as { position?: unknown }).position
         );
 
-        if (dragChange && dragChange.type === 'position' && dragChange.position) {
+        // Only snap if dragging a single node (allows multi-node selection to move together seamlessly)
+        if (posChanges.length === 1) {
+          const dragChange = posChanges[0] as { id: string };
           const draggedNode = nextNodes.find((n) => n.id === dragChange.id);
           if (draggedNode) {
             const dX = draggedNode.position.x;
@@ -174,7 +176,7 @@ const DiagramFlow = () => {
             let minDiffY = PORT_ALIGN_THRESHOLD;
 
             for (const other of nextNodes) {
-              if (other.id === draggedNode.id) continue;
+              if (other.id === draggedNode.id || other.selected) continue;
               const oX = other.position.x;
               const oY = other.position.y;
               const oW = (other.width as number) || 120;
@@ -182,14 +184,14 @@ const DiagramFlow = () => {
               const oCenterX = oX + oW / 2;
               const oCenterY = oY + oH / 2;
 
-              // 1. Horizontal Port Alignment (matching center Y makes horizontal wires 100% straight)
+              // 1. Horizontal Port Alignment
               const diffCenterY = Math.abs(dCenterY - oCenterY);
               if (diffCenterY < minDiffY) {
                 minDiffY = diffCenterY;
                 snapY = oCenterY - dH / 2;
               }
 
-              // 2. Vertical Port Alignment (matching center X makes vertical wires 100% straight)
+              // 2. Vertical Port Alignment
               const diffCenterX = Math.abs(dCenterX - oCenterX);
               if (diffCenterX < minDiffX) {
                 minDiffX = diffCenterX;
@@ -265,6 +267,14 @@ const DiagramFlow = () => {
         } else {
           enterPresentMode();
         }
+        return;
+      }
+
+      // Select All (Cmd/Ctrl + A)
+      if (!isPresenting && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setNodes((nds) => nds.map((n) => ({ ...n, selected: true })));
+        setEdges((eds) => eds.map((edge) => ({ ...edge, selected: true })));
         return;
       }
 
@@ -695,9 +705,13 @@ const DiagramFlow = () => {
           fitView
           nodesDraggable={!isPresenting}
           nodesConnectable={!isPresenting}
-          elementsSelectable={true}
+          elementsSelectable={!isPresenting}
           nodesFocusable={!isPresenting}
           edgesFocusable={!isPresenting}
+          selectionMode={SelectionMode.Partial}
+          multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
+          selectionKeyCode={['Shift', 'Control', 'Meta']}
+          selectNodesOnDrag={true}
           connectionRadius={32}
           connectionMode={ConnectionMode.Loose}
           proOptions={{ hideAttribution: true }}
@@ -732,7 +746,7 @@ const DiagramFlow = () => {
           <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end">
             {/* Help Popover */}
             {showHelp && (
-              <div className="mb-2.5 w-72 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <div className="mb-2.5 w-76 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-3.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in slide-in-from-bottom-2 duration-150">
                 <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-900 dark:text-zinc-100">
                   <span className="flex items-center gap-1.5 text-xs">
                     <HelpCircle size={14} className="text-indigo-500" />
@@ -748,6 +762,22 @@ const DiagramFlow = () => {
 
                 <div className="space-y-2 text-[11px] leading-relaxed">
                   <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Box / Marquee Select</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Shift + Drag</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Select Multiple</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Shift / Ctrl + Click</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Select All</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + A</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Move Group</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Drag any selected</span>
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span className="text-zinc-600 dark:text-zinc-400">Present Mode</span>
                     <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">P</kbd>
                   </div>
@@ -756,7 +786,7 @@ const DiagramFlow = () => {
                     <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click wire</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-600 dark:text-zinc-400">Delete Node / Wire</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">Delete Selected</span>
                     <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Del / Backspace</kbd>
                   </div>
                   <div className="flex items-center justify-between">
