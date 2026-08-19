@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { KeyRound, X, Check, ExternalLink, ShieldCheck, Cpu } from 'lucide-react';
+import { X, Check, ExternalLink, ShieldCheck, Cpu } from 'lucide-react';
 import { AIProvider, PROVIDER_DEFAULTS, AIClientConfig } from '@/utils/aiClient';
 
 interface AISettingsModalProps {
@@ -21,27 +21,98 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   const [customModel, setCustomModel] = useState(config?.model || '');
   const [saved, setSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; tag?: string }>>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Fetch live active models for the provider and API key
+  const fetchLiveModels = async (targetProvider: AIProvider, targetKey: string) => {
+    setLoadingModels(true);
+    try {
+      const res = await fetch('/api/ai/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aiConfig: {
+            provider: targetProvider,
+            apiKey: targetKey,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.models && data.models.length > 0) {
+        setAvailableModels(data.models);
+      } else {
+        setAvailableModels(PROVIDER_DEFAULTS[targetProvider]?.supportedModels || []);
+      }
+    } catch {
+      setAvailableModels(PROVIDER_DEFAULTS[targetProvider]?.supportedModels || []);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
-      setProvider(config?.provider || 'groq');
-      setApiKey(config?.apiKey || '');
-      setCustomModel(config?.model || '');
+      const p = config?.provider || 'groq';
+      const key = config?.apiKey || '';
+      setProvider(p);
+      setApiKey(key);
+      setCustomModel(config?.model || PROVIDER_DEFAULTS[p]?.defaultModel || '');
       setSaved(false);
+      fetchLiveModels(p, key);
     }
   }, [isOpen, config]);
 
   const activeProviderInfo = PROVIDER_DEFAULTS[provider];
 
+  const handleProviderSelect = (p: AIProvider) => {
+    setProvider(p);
+    const defModel = PROVIDER_DEFAULTS[p].defaultModel;
+    setCustomModel(defModel);
+    fetchLiveModels(p, apiKey);
+  };
+
+  const handleApiKeyChange = (val: string) => {
+    const trimmed = val.trim();
+    setApiKey(trimmed);
+    let targetP = provider;
+    // Auto-detect provider if user pastes a key with known prefix
+    if (trimmed.startsWith('gsk_') && provider !== 'groq') {
+      targetP = 'groq';
+      setProvider('groq');
+      setCustomModel(PROVIDER_DEFAULTS.groq.defaultModel);
+    } else if (trimmed.startsWith('sk-') && provider !== 'openai') {
+      targetP = 'openai';
+      setProvider('openai');
+      setCustomModel(PROVIDER_DEFAULTS.openai.defaultModel);
+    } else if (trimmed.startsWith('xai-') && provider !== 'grok') {
+      targetP = 'grok';
+      setProvider('grok');
+      setCustomModel(PROVIDER_DEFAULTS.grok.defaultModel);
+    }
+    fetchLiveModels(targetP, trimmed);
+  };
+
   const handleSave = () => {
+    const finalProvider = provider;
+    const finalKey = apiKey.trim();
+    let finalModel = customModel.trim() || PROVIDER_DEFAULTS[finalProvider].defaultModel;
+
+    // Safety check on model name
+    if (finalProvider === 'openai' && (finalModel.startsWith('llama') || finalModel.startsWith('grok'))) {
+      finalModel = PROVIDER_DEFAULTS.openai.defaultModel;
+    } else if (finalProvider === 'groq' && (finalModel.startsWith('gpt') || finalModel.startsWith('grok'))) {
+      finalModel = PROVIDER_DEFAULTS.groq.defaultModel;
+    }
+
     onSaveConfig({
-      provider,
-      apiKey: apiKey.trim(),
-      model: customModel.trim() || activeProviderInfo.defaultModel,
+      provider: finalProvider,
+      apiKey: finalKey,
+      model: finalModel,
     });
     setSaved(true);
     setTimeout(() => {
@@ -54,7 +125,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     onSaveConfig({
       provider,
       apiKey: '',
-      model: '',
+      model: PROVIDER_DEFAULTS[provider].defaultModel,
     });
   };
 
@@ -108,13 +179,8 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   <button
                     key={p}
                     type="button"
-                    onClick={() => {
-                      setProvider(p);
-                      if (!customModel || customModel === activeProviderInfo.defaultModel) {
-                        setCustomModel(info.defaultModel);
-                      }
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
+                    onClick={() => handleProviderSelect(p)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
                         ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 shadow-xs'
                         : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300'
@@ -133,8 +199,56 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
+          {/* Model Selection */}
+          <div className="space-y-1.5 pt-1">
+            <label className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+              <span>Model</span>
+              <span className="text-[10px] text-zinc-400">
+                {loadingModels ? 'Fetching live models...' : 'Select active model or type custom ID'}
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+              {(availableModels.length > 0 ? availableModels : activeProviderInfo.supportedModels || []).map((m) => {
+                const isModelSelected = customModel === m.id || (!customModel && activeProviderInfo.defaultModel === m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setCustomModel(m.id)}
+                    className={`px-2.5 py-2 rounded-lg border text-left transition-all cursor-pointer ${
+                      isModelSelected
+                        ? 'border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold shadow-xs'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="truncate">{m.name}</span>
+                      {m.tag && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-200 dark:bg-zinc-700 font-normal ml-1 shrink-0">
+                          {m.tag}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
+                      {m.id}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="pt-1">
+              <input
+                type="text"
+                placeholder="Or custom model ID (e.g. openai/gpt-oss-120b, gpt-4o)..."
+                value={customModel}
+                onChange={(e) => setCustomModel(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg outline-none focus:border-indigo-500 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 font-mono transition-colors"
+              />
+            </div>
+          </div>
+
           {/* API Key Input */}
-          <div className="space-y-1.5 pt-2">
+          <div className="space-y-1.5 pt-1">
             <label className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
               <span>{activeProviderInfo.name} API Key</span>
               <span className="text-[10px] font-normal text-zinc-400">
@@ -145,7 +259,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               type="password"
               placeholder={`Enter ${activeProviderInfo.name} API key...`}
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => handleApiKeyChange(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg outline-none focus:border-indigo-500 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 font-mono transition-colors"
             />
           </div>

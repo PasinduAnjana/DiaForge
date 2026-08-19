@@ -174,7 +174,9 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
   const [mounted, setMounted] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeModel = aiConfig?.model || 'llama-3.1-8b-instant';
+  const activeProvider = aiConfig?.provider || 'groq';
+  const activeModel =
+    aiConfig?.model || PROVIDER_DEFAULTS[activeProvider]?.defaultModel || 'llama-3.1-8b-instant';
 
   useEffect(() => {
     setMounted(true);

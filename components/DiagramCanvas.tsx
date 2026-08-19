@@ -94,7 +94,7 @@ const DiagramFlow = () => {
   const [aiConfig, setAiConfig] = useState<AIClientConfig>({
     provider: 'groq',
     apiKey: '',
-    model: 'llama-3.1-8b-instant',
+    model: 'openai/gpt-oss-120b',
   });
 
   const { screenToFlowPosition, fitView, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow();
@@ -102,14 +102,19 @@ const DiagramFlow = () => {
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Load custom AI configuration on mount and migrate legacy rate-limited models
+  // Load custom AI configuration on mount and migrate legacy/deprecated models
   useEffect(() => {
     try {
       const stored = localStorage.getItem('diaflow_ai_config');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.model === 'llama-3.3-70b-versatile' || !parsed.model) {
-          parsed.model = 'llama-3.1-8b-instant';
+        if (
+          parsed.provider === 'groq' &&
+          (parsed.model?.includes('llama') ||
+            parsed.model?.includes('qwen-2.5-32b') ||
+            !parsed.model)
+        ) {
+          parsed.model = 'openai/gpt-oss-120b';
           localStorage.setItem('diaflow_ai_config', JSON.stringify(parsed));
         }
         setAiConfig(parsed);
