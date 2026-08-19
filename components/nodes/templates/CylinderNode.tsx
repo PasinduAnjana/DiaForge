@@ -102,32 +102,14 @@ export const createCylinderNode = ({
       ? themeStyles.stroke
       : 'stroke-zinc-300 dark:stroke-zinc-700';
 
-    const handleSelectColor = useCallback(
-      (newColor: NodeColorTheme) => {
-        setNodes((nds) =>
-          nds.map((node) => {
-            if (node.id === id) {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  color: newColor,
-                },
-              };
-            }
-            return node;
-          })
-        );
-      },
-      [id, setNodes]
-    );
-
-    const handleUpdateDetails = useCallback(
+    const handleApplyAll = useCallback(
       ({
+        color: newColor,
         label: newLabel,
         badge: newBadge,
         description: newDescription,
       }: {
+        color?: NodeColorTheme;
         label?: string;
         badge?: string;
         description?: string;
@@ -139,6 +121,7 @@ export const createCylinderNode = ({
                 ...node,
                 data: {
                   ...node.data,
+                  color: newColor || node.data?.color || color,
                   label: newLabel || defaultLabel,
                   badge: newBadge,
                   description: newDescription,
@@ -150,7 +133,7 @@ export const createCylinderNode = ({
           })
         );
       },
-      [id, defaultLabel, setNodes]
+      [id, color, defaultLabel, setNodes]
     );
 
     return (
@@ -240,14 +223,12 @@ export const createCylinderNode = ({
         <IconPickerModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          onSelectIcon={() => {}}
           currentIconName="Database"
           currentColor={nodeColor}
-          onSelectColor={handleSelectColor}
           currentLabel={data?.label || defaultLabel}
           currentBadge={data?.badge || ''}
           currentDescription={data?.description || data?.sublabel || ''}
-          onUpdateDetails={handleUpdateDetails}
+          onApplyAll={handleApplyAll}
         />
       </>
     );

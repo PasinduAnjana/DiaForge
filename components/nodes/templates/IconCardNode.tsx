@@ -71,52 +71,16 @@ export const createIconCardNode = ({
       DefaultIcon as LucideIcon
     );
 
-    const handleSelectIcon = useCallback(
-      (newIconName: string) => {
-        setNodes((nds) =>
-          nds.map((node) => {
-            if (node.id === id) {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  iconName: newIconName,
-                },
-              };
-            }
-            return node;
-          })
-        );
-      },
-      [id, setNodes]
-    );
-
-    const handleSelectColor = useCallback(
-      (newColor: NodeColorTheme) => {
-        setNodes((nds) =>
-          nds.map((node) => {
-            if (node.id === id) {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  color: newColor,
-                },
-              };
-            }
-            return node;
-          })
-        );
-      },
-      [id, setNodes]
-    );
-
-    const handleUpdateDetails = useCallback(
+    const handleApplyAll = useCallback(
       ({
+        iconName: newIconName,
+        color: newColor,
         label: newLabel,
         badge: newBadge,
         description: newDescription,
       }: {
+        iconName?: string;
+        color?: NodeColorTheme;
         label?: string;
         badge?: string;
         description?: string;
@@ -128,6 +92,8 @@ export const createIconCardNode = ({
                 ...node,
                 data: {
                   ...node.data,
+                  iconName: newIconName || node.data?.iconName,
+                  color: newColor || node.data?.color || color,
                   label: newLabel || defaultLabel,
                   badge: newBadge,
                   description: newDescription,
@@ -139,7 +105,7 @@ export const createIconCardNode = ({
           })
         );
       },
-      [id, defaultLabel, setNodes]
+      [id, color, defaultLabel, setNodes]
     );
 
     return (
@@ -233,14 +199,12 @@ export const createIconCardNode = ({
         <IconPickerModal
           isOpen={isPickerOpen}
           onClose={() => setIsPickerOpen(false)}
-          onSelectIcon={handleSelectIcon}
           currentIconName={data?.iconName}
           currentColor={nodeColor}
-          onSelectColor={handleSelectColor}
           currentLabel={data?.label || defaultLabel}
           currentBadge={data?.badge || ''}
           currentDescription={data?.description || data?.sublabel || ''}
-          onUpdateDetails={handleUpdateDetails}
+          onApplyAll={handleApplyAll}
         />
       </>
     );

@@ -216,26 +216,190 @@ const DiagramFlow = () => {
     [setNodes]
   );
 
-  // 1. Initial Load from LocalStorage
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((curr) => (curr === msg ? null : curr));
+    }, 2000);
+  }, []);
+
+  // Node Clipboard for Copy & Paste
+  const clipboardRef = useRef<{
+    nodes: Node[];
+    edges: Edge[];
+    pasteCount: number;
+  } | null>(null);
+
+  const copySelected = useCallback(() => {
+    const selectedNodes = nodes.filter((n) => n.selected);
+    if (selectedNodes.length === 0) return false;
+
+    const selectedNodeIds = new Set(selectedNodes.map((n) => n.id));
+    const connectingEdges = edges.filter(
+      (e) => selectedNodeIds.has(e.source) && selectedNodeIds.has(e.target)
+    );
+
+    clipboardRef.current = {
+      nodes: JSON.parse(JSON.stringify(selectedNodes)),
+      edges: JSON.parse(JSON.stringify(connectingEdges)),
+      pasteCount: 0,
+    };
+
+    showToast(`Copied ${selectedNodes.length} ${selectedNodes.length === 1 ? 'node' : 'nodes'}`);
+    return true;
+  }, [nodes, edges, showToast]);
+
+  const cutSelected = useCallback(() => {
+    const selectedNodes = nodes.filter((n) => n.selected);
+    if (selectedNodes.length === 0) return;
+
+    const selectedNodeIds = new Set(selectedNodes.map((n) => n.id));
+    const connectingEdges = edges.filter(
+      (e) => selectedNodeIds.has(e.source) && selectedNodeIds.has(e.target)
+    );
+
+    clipboardRef.current = {
+      nodes: JSON.parse(JSON.stringify(selectedNodes)),
+      edges: JSON.parse(JSON.stringify(connectingEdges)),
+      pasteCount: 0,
+    };
+
+    setNodes((nds) => nds.filter((n) => !n.selected));
+    setEdges((eds) =>
+      eds.filter(
+        (e) =>
+          !e.selected &&
+          !selectedNodeIds.has(e.source) &&
+          !selectedNodeIds.has(e.target)
+      )
+    );
+
+    showToast(`Cut ${selectedNodes.length} ${selectedNodes.length === 1 ? 'node' : 'nodes'}`);
+  }, [nodes, edges, setNodes, setEdges, showToast]);
+
+  const pasteNodes = useCallback(() => {
+    if (!clipboardRef.current || clipboardRef.current.nodes.length === 0) return;
+
+    clipboardRef.current.pasteCount += 1;
+    const offset = 30 * clipboardRef.current.pasteCount;
+    const idMap: Record<string, string> = {};
+
+    const newNodes: Node[] = clipboardRef.current.nodes.map((node) => {
+      const newId = `${node.type || 'node'}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      idMap[node.id] = newId;
+
+      return {
+        ...JSON.parse(JSON.stringify(node)),
+        id: newId,
+        position: {
+          x: node.position.x + offset,
+          y: node.position.y + offset,
+        },
+        selected: true,
+      };
+    });
+
+    const newEdges: Edge[] = clipboardRef.current.edges.map((edge) => {
+      const newEdgeId = `e_${idMap[edge.source] || edge.source}_${idMap[edge.target] || edge.target}_${Math.random().toString(36).substring(2, 6)}`;
+      return {
+        ...JSON.parse(JSON.stringify(edge)),
+        id: newEdgeId,
+        source: idMap[edge.source] || edge.source,
+        target: idMap[edge.target] || edge.target,
+        selected: true,
+      };
+    });
+
+    setNodes((nds) => [
+      ...nds.map((n) => ({ ...n, selected: false })),
+      ...newNodes,
+    ]);
+    setEdges((eds) => [
+      ...eds.map((e) => ({ ...e, selected: false })),
+      ...newEdges,
+    ]);
+
+    showToast(`Pasted ${newNodes.length} ${newNodes.length === 1 ? 'node' : 'nodes'}`);
+  }, [setNodes, setEdges, showToast]);
+
+  const duplicateSelected = useCallback(() => {
+    const selectedNodes = nodes.filter((n) => n.selected);
+    if (selectedNodes.length === 0) return;
+
+    const selectedNodeIds = new Set(selectedNodes.map((n) => n.id));
+    const connectingEdges = edges.filter(
+      (e) => selectedNodeIds.has(e.source) && selectedNodeIds.has(e.target)
+    );
+
+    const idMap: Record<string, string> = {};
+    const offset = 35;
+
+    const newNodes: Node[] = selectedNodes.map((node) => {
+      const newId = `${node.type || 'node'}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      idMap[node.id] = newId;
+
+      return {
+        ...JSON.parse(JSON.stringify(node)),
+        id: newId,
+        position: {
+          x: node.position.x + offset,
+          y: node.position.y + offset,
+        },
+        selected: true,
+      };
+    });
+
+    const newEdges: Edge[] = connectingEdges.map((edge) => {
+      const newEdgeId = `e_${idMap[edge.source]}_${idMap[edge.target]}_${Math.random().toString(36).substring(2, 6)}`;
+      return {
+        ...JSON.parse(JSON.stringify(edge)),
+        id: newEdgeId,
+        source: idMap[edge.source],
+        target: idMap[edge.target],
+        selected: true,
+      };
+    });
+
+    setNodes((nds) => [
+      ...nds.map((n) => ({ ...n, selected: false })),
+      ...newNodes,
+    ]);
+    setEdges((eds) => [
+      ...eds.map((e) => ({ ...e, selected: false })),
+      ...newEdges,
+    ]);
+
+    showToast(`Duplicated ${newNodes.length} ${newNodes.length === 1 ? 'node' : 'nodes'}`);
+  }, [nodes, edges, setNodes, setEdges, showToast]);
+
+  // Sync isDark with next-themes safely
+  const isDark = mounted && theme === 'dark';
+
+  // 1. Initial State Restoration
   useEffect(() => {
     setMounted(true);
     const saved = loadDiagramFromStorage();
-    if (saved && saved.nodes && saved.nodes.length > 0) {
-      setNodes(saved.nodes);
-      if (saved.edges && saved.edges.length > 0) setEdges(saved.edges);
+    if (saved) {
+      setNodes(saved.nodes || []);
+      setEdges(saved.edges || []);
       if (saved.name) setTitle(saved.name);
-      const resolvedType = inferDiagramTypeFromNodes(saved.nodes, saved.diagramType);
-      setDiagramType(resolvedType);
+      if (saved.diagramType) {
+        setDiagramType(saved.diagramType);
+      } else {
+        setDiagramType(inferDiagramTypeFromNodes(saved.nodes || []));
+      }
       if (saved.viewport) {
-        setTimeout(() => setViewport(saved.viewport!), 50);
+        setViewport(saved.viewport);
       }
     } else {
-      // Prompt for Diagram Type on fresh / empty visit
-      setIsNewModalOpen(true);
+      setNodes([]);
+      setEdges([]);
     }
-  }, [setNodes, setEdges, setViewport]);
+  }, [setViewport, setNodes, setEdges]);
 
-  // 2. Debounced Auto-Save
+  // 2. Continuous Autosave (Debounced)
   useEffect(() => {
     if (!mounted || isPresenting) return;
     setIsSaved(false);
@@ -275,6 +439,35 @@ const DiagramFlow = () => {
         return;
       }
 
+      // Copy (Cmd/Ctrl + C)
+      if (!isPresenting && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+        if (copySelected()) {
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Cut (Cmd/Ctrl + X)
+      if (!isPresenting && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        cutSelected();
+        return;
+      }
+
+      // Paste (Cmd/Ctrl + V)
+      if (!isPresenting && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        pasteNodes();
+        return;
+      }
+
+      // Duplicate (Cmd/Ctrl + D)
+      if (!isPresenting && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        duplicateSelected();
+        return;
+      }
+
       // Select All (Cmd/Ctrl + A)
       if (!isPresenting && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault();
@@ -311,7 +504,23 @@ const DiagramFlow = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setNodes, setEdges, nodes, edges, title, diagramType, getViewport, isPresenting, enterPresentMode, exitPresentMode]);
+  }, [
+    setNodes,
+    setEdges,
+    nodes,
+    edges,
+    title,
+    diagramType,
+    getViewport,
+    isPresenting,
+    enterPresentMode,
+    exitPresentMode,
+    showHelp,
+    copySelected,
+    cutSelected,
+    pasteNodes,
+    duplicateSelected,
+  ]);
 
   const onConnect = useCallback(
     (params: Edge | Connection) => {
@@ -502,8 +711,6 @@ const DiagramFlow = () => {
       }
     });
   }, []);
-
-  const isDark = mounted ? theme === 'dark' : true;
 
   const onConnectStart = useCallback(() => {
     if (isPresenting) return;
@@ -767,6 +974,22 @@ const DiagramFlow = () => {
 
                 <div className="space-y-2 text-[11px] leading-relaxed">
                   <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Copy Selected</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + C</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Paste</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + V</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Duplicate</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + D</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600 dark:text-zinc-400">Cut</span>
+                    <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + X</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span className="text-zinc-600 dark:text-zinc-400">Box / Marquee Select</span>
                     <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Shift + Drag</kbd>
                   </div>
@@ -799,12 +1022,8 @@ const DiagramFlow = () => {
                     <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-800 dark:text-zinc-200">Ctrl / ⌘ + S</kbd>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-600 dark:text-zinc-400">Edit Node Label</span>
-                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Double-click node</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-600 dark:text-zinc-400">Change Icon & Color</span>
-                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Click node icon</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">Edit Node Details</span>
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">Click icon / Double-click</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-600 dark:text-zinc-400">Open Diagram</span>
@@ -826,6 +1045,14 @@ const DiagramFlow = () => {
             >
               <HelpCircle size={16} />
             </button>
+          </div>
+        )}
+
+        {/* Floating Toast Notification */}
+        {toastMessage && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 dark:bg-zinc-100/90 text-white dark:text-zinc-900 text-xs px-3.5 py-1.5 rounded-full shadow-xl backdrop-blur-md font-medium animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-1.5 pointer-events-none">
+            <Check size={13} className="text-emerald-400 dark:text-emerald-600 shrink-0" />
+            <span>{toastMessage}</span>
           </div>
         )}
 

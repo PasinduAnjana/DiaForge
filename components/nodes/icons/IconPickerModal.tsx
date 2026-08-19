@@ -7,7 +7,7 @@ import { NodeColorTheme } from '../base/BaseNode';
 interface IconPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectIcon: (iconName: string) => void;
+  onSelectIcon?: (iconName: string) => void;
   currentIconName?: string;
   currentColor?: string;
   onSelectColor?: (color: NodeColorTheme) => void;
@@ -15,6 +15,13 @@ interface IconPickerModalProps {
   currentBadge?: string;
   currentDescription?: string;
   onUpdateDetails?: (details: { label?: string; badge?: string; description?: string }) => void;
+  onApplyAll?: (details: {
+    iconName?: string;
+    color?: NodeColorTheme;
+    label?: string;
+    badge?: string;
+    description?: string;
+  }) => void;
 }
 
 const CATEGORIES = [
@@ -69,9 +76,14 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
   currentBadge = '',
   currentDescription = '',
   onUpdateDetails,
+  onApplyAll,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedIcon, setSelectedIcon] = useState(currentIconName || '');
+  const [selectedColor, setSelectedColor] = useState<NodeColorTheme>(
+    (currentColor as NodeColorTheme) || 'indigo'
+  );
   const [label, setLabel] = useState(currentLabel);
   const [badge, setBadge] = useState(currentBadge);
   const [description, setDescription] = useState(currentDescription);
@@ -84,11 +96,13 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setSelectedIcon(currentIconName || '');
+      setSelectedColor((currentColor as NodeColorTheme) || 'indigo');
       setLabel(currentLabel || '');
       setBadge(currentBadge || '');
       setDescription(currentDescription || '');
     }
-  }, [isOpen, currentLabel, currentBadge, currentDescription]);
+  }, [isOpen, currentIconName, currentColor, currentLabel, currentBadge, currentDescription]);
 
   // Global escape key listener
   useEffect(() => {
@@ -104,14 +118,28 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleApplyDetails = () => {
-    if (onUpdateDetails) {
-      onUpdateDetails({
+  const handleApply = (iconOverride?: string) => {
+    const finalIcon = iconOverride || selectedIcon || currentIconName;
+    if (onApplyAll) {
+      onApplyAll({
+        iconName: finalIcon,
+        color: selectedColor,
         label: label.trim() || undefined,
         badge: badge.trim() || undefined,
         description: description.trim() || undefined,
       });
+    } else {
+      if (onSelectIcon && finalIcon) onSelectIcon(finalIcon);
+      if (onSelectColor && selectedColor) onSelectColor(selectedColor);
+      if (onUpdateDetails) {
+        onUpdateDetails({
+          label: label.trim() || undefined,
+          badge: badge.trim() || undefined,
+          description: description.trim() || undefined,
+        });
+      }
     }
+    onClose();
   };
 
   const filteredIcons = useMemo(() => {
@@ -168,7 +196,7 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
         </div>
 
         {/* Node Details: Title, Badge, Description */}
-        {onUpdateDetails && (
+        {(onUpdateDetails || onApplyAll) && (
           <div className="p-3.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 space-y-2.5">
             <div className="grid grid-cols-2 gap-2">
               {/* Title / Label */}
@@ -247,26 +275,27 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
         )}
 
         {/* Color Palette Selector */}
-        {onSelectColor && (
-          <div className="px-4 py-2 bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-            <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">Color Theme</span>
-            <div className="flex items-center gap-1.5">
-              {COLOR_OPTIONS.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => onSelectColor(c.name)}
-                  title={c.label}
-                  className={`w-5 h-5 rounded-full transition-all cursor-pointer ${c.bg} ${
-                    currentColor === c.name
-                      ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-zinc-900 scale-110'
-                      : 'hover:scale-115 opacity-80 hover:opacity-100'
-                  }`}
-                />
-              ))}
-            </div>
+        <div className="px-4 py-2 bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+          <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">Color Theme</span>
+          <div className="flex items-center gap-1.5">
+            {COLOR_OPTIONS.map((c) => (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => {
+                  setSelectedColor(c.name);
+                  if (onSelectColor) onSelectColor(c.name);
+                }}
+                title={c.label}
+                className={`w-5 h-5 rounded-full transition-all cursor-pointer ${c.bg} ${
+                  selectedColor === c.name
+                    ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-zinc-900 scale-110'
+                    : 'hover:scale-115 opacity-80 hover:opacity-100'
+                }`}
+              />
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Search Input */}
         <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
@@ -310,20 +339,22 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
             <div className="grid grid-cols-6 sm:grid-cols-7 gap-2">
               {filteredIcons.map((item: IconItem) => {
                 const IconComponent = item.icon;
-                const isSelected = currentIconName === item.name;
+                const isSelected = (selectedIcon || currentIconName) === item.name;
 
                 return (
                   <button
                     key={item.name}
+                    type="button"
                     onClick={() => {
-                      onSelectIcon(item.name);
-                      handleApplyDetails();
-                      onClose();
+                      setSelectedIcon(item.name);
                     }}
-                    title={item.label}
+                    onDoubleClick={() => {
+                      handleApply(item.name);
+                    }}
+                    title={`${item.label} (Click to select, double-click to apply)`}
                     className={`flex flex-col items-center justify-center p-2.5 rounded-lg transition-all group cursor-pointer ${
                       isSelected
-                        ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500'
+                        ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 ring-2 ring-indigo-500 shadow-xs'
                         : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
                     }`}
                   >
@@ -348,10 +379,7 @@ export const IconPickerModal: React.FC<IconPickerModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                handleApplyDetails();
-                onClose();
-              }}
+              onClick={() => handleApply()}
               className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-xs transition-colors cursor-pointer"
             >
               Apply Changes

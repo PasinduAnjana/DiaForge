@@ -114,7 +114,18 @@ export const ALL_LUCIDE_ICONS: IconItem[] = Object.keys(LucideIcons)
     icon: (LucideIcons as unknown as Record<string, LucideIcon>)[name],
   }));
 
-// Fast resolver for any Lucide icon name
+const LUCIDE_LOWERCASE_MAP = new Map<string, LucideIcon>();
+Object.keys(LucideIcons).forEach((key) => {
+  if (/^[A-Z]/.test(key) && !nonIconKeys.has(key)) {
+    const comp = (LucideIcons as Record<string, unknown>)[key];
+    if (typeof comp === 'function' || typeof comp === 'object') {
+      LUCIDE_LOWERCASE_MAP.set(key.toLowerCase(), comp as LucideIcon);
+      LUCIDE_LOWERCASE_MAP.set(key.toLowerCase().replace(/[-_]/g, ''), comp as LucideIcon);
+    }
+  }
+});
+
+// Fast resolver for any Lucide icon name (case-insensitive and alias-aware)
 export const getIconComponent = (
   iconName?: string,
   fallbackIcon: LucideIcon = Box
@@ -123,6 +134,11 @@ export const getIconComponent = (
   const icon = (LucideIcons as Record<string, unknown>)[iconName];
   if (icon && (typeof icon === 'function' || typeof icon === 'object')) {
     return icon as LucideIcon;
+  }
+  const clean = iconName.toLowerCase().replace(/[-_]/g, '');
+  const matched = LUCIDE_LOWERCASE_MAP.get(clean) || LUCIDE_LOWERCASE_MAP.get(iconName.toLowerCase());
+  if (matched) {
+    return matched;
   }
   return fallbackIcon;
 };
