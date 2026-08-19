@@ -26,6 +26,18 @@ const BORDER_COLOR_MAP: Record<NodeColorTheme, { border: string; iconColor: stri
   zinc: { border: 'border-zinc-400 dark:border-zinc-500', iconColor: 'text-zinc-500 dark:text-zinc-400' },
 };
 
+const BADGE_COLOR_MAP: Record<NodeColorTheme, string> = {
+  blue: 'bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  green: 'bg-green-50 dark:bg-green-950/80 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+  emerald: 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  purple: 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  indigo: 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+  amber: 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  rose: 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+  cyan: 'bg-cyan-50 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+  zinc: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700',
+};
+
 export const createIconCardNode = ({
   icon: DefaultIcon = Box,
   defaultLabel = 'Node',
@@ -49,9 +61,10 @@ export const createIconCardNode = ({
     const nodeColor = (data?.color as NodeColorTheme) || color;
     const isHorizontalLayout = layout === 'horizontal';
     const themeStyles = BORDER_COLOR_MAP[nodeColor] || BORDER_COLOR_MAP.indigo;
+    const badgeStyles = BADGE_COLOR_MAP[nodeColor] || BADGE_COLOR_MAP.indigo;
 
-    const defaultMinWidth = minWidth ?? (isHorizontalLayout ? 120 : 80);
-    const defaultMinHeight = minHeight ?? (isHorizontalLayout ? 44 : 80);
+    const defaultMinWidth = minWidth ?? (isHorizontalLayout ? 130 : 85);
+    const defaultMinHeight = minHeight ?? (isHorizontalLayout ? 46 : 85);
 
     const ActiveIcon = getIconComponent(
       data?.iconName,
@@ -98,6 +111,37 @@ export const createIconCardNode = ({
       [id, setNodes]
     );
 
+    const handleUpdateDetails = useCallback(
+      ({
+        label: newLabel,
+        badge: newBadge,
+        description: newDescription,
+      }: {
+        label?: string;
+        badge?: string;
+        description?: string;
+      }) => {
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id === id) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  label: newLabel || defaultLabel,
+                  badge: newBadge,
+                  description: newDescription,
+                  sublabel: newDescription,
+                },
+              };
+            }
+            return node;
+          })
+        );
+      },
+      [id, defaultLabel, setNodes]
+    );
+
     return (
       <>
         <BaseNode
@@ -110,12 +154,12 @@ export const createIconCardNode = ({
           onDoubleClick={() => setIsEditing(true)}
         >
           <div
-            className={`w-full h-full shadow-md rounded-lg bg-white dark:bg-zinc-900 border-2 transition-colors flex items-center justify-center p-3 gap-2.5 ${
+            className={`w-full h-full shadow-md rounded-lg bg-white dark:bg-zinc-900 border-2 transition-colors flex items-center p-3 gap-2.5 ${
               selected ? themeStyles.border : 'border-zinc-300 dark:border-zinc-700'
             } ${
               isHorizontalLayout
-                ? 'flex-row min-w-[120px] min-h-[44px]'
-                : 'flex-col min-w-[80px] min-h-[80px]'
+                ? 'flex-row min-w-[130px] min-h-[46px]'
+                : 'flex-col min-w-[85px] min-h-[85px] justify-center text-center'
             }`}
           >
             {/* Clickable Icon Button */}
@@ -126,8 +170,8 @@ export const createIconCardNode = ({
                 e.stopPropagation();
                 setIsPickerOpen(true);
               }}
-              className="p-1 -m-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center cursor-pointer group/icon"
-              title="Click to customize icon and color"
+              className="p-1 -m-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center cursor-pointer group/icon shrink-0"
+              title="Click to customize badge, description, icon & color"
             >
               <ActiveIcon
                 size={isHorizontalLayout ? 18 : 22}
@@ -135,21 +179,57 @@ export const createIconCardNode = ({
               />
             </button>
 
-            <div className="flex items-center justify-center min-w-0 max-w-full">
+            {/* Content Container (Title, Badge, Description) */}
+            <div
+              className={`flex flex-col min-w-0 max-w-full justify-center ${
+                isHorizontalLayout ? 'items-start text-left' : 'items-center text-center'
+              }`}
+            >
+              {/* Title */}
               <EditableLabel
                 id={id}
                 initialLabel={data?.label}
                 defaultLabel={defaultLabel}
                 isEditing={isEditing}
                 setIsEditing={setIsEditing}
-                className="text-zinc-800 dark:text-zinc-100 text-center font-medium truncate"
-                inputClassName="text-center w-full font-medium"
+                className="text-zinc-800 dark:text-zinc-100 font-semibold truncate text-xs sm:text-sm"
+                inputClassName="text-left w-full font-semibold text-xs sm:text-sm"
               />
+
+              {/* Badge on a new line below Title */}
+              {data?.badge && (
+                <div className="mt-1">
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsPickerOpen(true);
+                    }}
+                    className={`inline-block text-[9px] leading-tight px-1.5 py-0.5 rounded-full font-semibold border ${badgeStyles} truncate max-w-[120px] cursor-pointer hover:opacity-85 shadow-2xs`}
+                    title={`Badge: ${data.badge} (Click to edit)`}
+                  >
+                    {data.badge}
+                  </span>
+                </div>
+              )}
+
+              {/* Optional Description / Subtitle */}
+              {(data?.description || data?.sublabel) && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsPickerOpen(true);
+                  }}
+                  className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 font-normal leading-tight truncate max-w-[220px] mt-1 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300"
+                  title={data.description || data.sublabel}
+                >
+                  {data.description || data.sublabel}
+                </div>
+              )}
             </div>
           </div>
         </BaseNode>
 
-        {/* Searchable Icon & Color Picker Modal */}
+        {/* Searchable Icon, Details & Color Picker Modal */}
         <IconPickerModal
           isOpen={isPickerOpen}
           onClose={() => setIsPickerOpen(false)}
@@ -157,6 +237,10 @@ export const createIconCardNode = ({
           currentIconName={data?.iconName}
           currentColor={nodeColor}
           onSelectColor={handleSelectColor}
+          currentLabel={data?.label || defaultLabel}
+          currentBadge={data?.badge || ''}
+          currentDescription={data?.description || data?.sublabel || ''}
+          onUpdateDetails={handleUpdateDetails}
         />
       </>
     );

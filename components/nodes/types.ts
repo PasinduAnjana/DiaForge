@@ -13,6 +13,8 @@ export type NodeCategory =
 export interface DiaFlowNodeData {
   label: string;
   sublabel?: string;
+  badge?: string;
+  description?: string;
   orientation?: 'horizontal' | 'vertical';
   color?: string;
   iconName?: string;

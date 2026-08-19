@@ -3,8 +3,11 @@ import { useReactFlow } from 'reactflow';
 
 export interface EditableLabelProps {
   id: string;
-  initialLabel: string;
-  defaultLabel: string;
+  initialLabel?: string;
+  defaultLabel?: string;
+  placeholder?: string;
+  dataKey?: string;
+  allowEmpty?: boolean;
   className?: string;
   inputClassName?: string;
   isEditing: boolean;
@@ -14,8 +17,11 @@ export interface EditableLabelProps {
 
 export const EditableLabel = ({
   id,
-  initialLabel,
-  defaultLabel,
+  initialLabel = '',
+  defaultLabel = '',
+  placeholder = '',
+  dataKey = 'label',
+  allowEmpty = false,
   className = '',
   inputClassName = '',
   isEditing,
@@ -27,7 +33,7 @@ export const EditableLabel = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setText(initialLabel || defaultLabel);
+    setText(initialLabel !== undefined ? initialLabel : defaultLabel);
   }, [initialLabel, defaultLabel]);
 
   useEffect(() => {
@@ -39,7 +45,8 @@ export const EditableLabel = ({
 
   const save = () => {
     setIsEditing(false);
-    const newText = text.trim() || defaultLabel;
+    const trimmed = text.trim();
+    const newText = allowEmpty ? trimmed : (trimmed || defaultLabel);
     setText(newText);
     if (onSave) {
       onSave(newText);
@@ -51,7 +58,7 @@ export const EditableLabel = ({
               ...node,
               data: {
                 ...node.data,
-                label: newText,
+                [dataKey]: newText || undefined,
               },
             };
           }
@@ -62,7 +69,7 @@ export const EditableLabel = ({
   };
 
   const cancel = () => {
-    setText(initialLabel || defaultLabel);
+    setText(initialLabel !== undefined ? initialLabel : defaultLabel);
     setIsEditing(false);
   };
 
@@ -71,6 +78,7 @@ export const EditableLabel = ({
       <input
         ref={inputRef}
         type="text"
+        placeholder={placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={save}

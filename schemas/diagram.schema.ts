@@ -48,6 +48,8 @@ export const NodeDataSchema = z
   .object({
     label: z.string().optional(),
     sublabel: z.string().optional(),
+    badge: z.string().optional(),
+    description: z.string().optional(),
     color: SafeNodeColorSchema.optional().default('indigo'),
     iconName: z.string().optional(),
     width: z.number().optional(),
@@ -116,6 +118,8 @@ export const AIGeneratedNodeSchema = z.object({
   type: z.string(),
   label: z.string(),
   sublabel: z.string().optional(),
+  badge: z.string().optional(),
+  description: z.string().optional(),
   color: SafeNodeColorSchema.optional().default('indigo'),
   iconName: z.string().optional(),
   tier: z.number().min(0).max(4).optional().describe('0=Clients, 1=Ingress/Edge, 2=App Services, 3=Data & Queues, 4=External'),

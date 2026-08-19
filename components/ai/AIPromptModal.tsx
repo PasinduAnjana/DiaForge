@@ -221,7 +221,9 @@ export const AIPromptModal: React.FC<AIPromptModalProps> = ({
           position: { x: 0, y: 0 },
           data: {
             label: n.label,
-            sublabel: n.sublabel,
+            badge: n.badge,
+            description: n.description || n.sublabel,
+            sublabel: n.description || n.sublabel,
             color: n.color || 'indigo',
             iconName: normalized.iconName,
             tier: typeof n.tier === 'number' ? n.tier : undefined,

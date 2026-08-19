@@ -26,10 +26,14 @@ export async function POST(req: NextRequest) {
     if (contextDiagram && contextDiagram.nodes && contextDiagram.nodes.length > 0) {
       const nodeList = contextDiagram.nodes
         .map(
-          (n: { id: string; type: string; data?: { label?: string; sublabel?: string } }) =>
+          (n: {
+            id: string;
+            type: string;
+            data?: { label?: string; badge?: string; description?: string; sublabel?: string };
+          }) =>
             `- [${n.id}] Type: ${n.type}, Label: "${n.data?.label || n.type}"${
-              n.data?.sublabel ? ` (${n.data.sublabel})` : ''
-            }`
+              n.data?.badge ? ` [Badge: ${n.data.badge}]` : ''
+            }${n.data?.description || n.data?.sublabel ? ` (Desc: ${n.data.description || n.data.sublabel})` : ''}`
         )
         .join('\n');
 

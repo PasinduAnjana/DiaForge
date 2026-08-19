@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { NodeProps } from 'reactflow';
+import React, { useState, useCallback } from 'react';
+import { NodeProps, useReactFlow } from 'reactflow';
 import { BaseNode, NodeColorTheme } from '../base/BaseNode';
 import { EditableLabel } from '../base/EditableLabel';
 import { DiaFlowNodeData } from '../types';
+import { IconPickerModal } from '../icons/IconPickerModal';
 
 const COLOR_CLASSES: Record<
   NodeColorTheme,
@@ -69,6 +70,18 @@ const COLOR_CLASSES: Record<
   },
 };
 
+const BADGE_CLASSES: Record<NodeColorTheme, string> = {
+  blue: 'bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  green: 'bg-green-50 dark:bg-green-950/80 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+  emerald: 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  purple: 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  indigo: 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+  amber: 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  rose: 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+  cyan: 'bg-cyan-50 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+  zinc: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700',
+};
+
 export const createCylinderNode = ({
   defaultLabel = 'Database',
   color = 'blue',
@@ -78,64 +91,165 @@ export const createCylinderNode = ({
 }) => {
   const Component = ({ id, data, selected }: NodeProps<DiaFlowNodeData>) => {
     const [isEditing, setIsEditing] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const { setNodes } = useReactFlow();
 
     const nodeColor = (data?.color as NodeColorTheme) || color;
     const themeStyles = COLOR_CLASSES[nodeColor] || COLOR_CLASSES.blue;
+    const badgeStyles = BADGE_CLASSES[nodeColor] || BADGE_CLASSES.blue;
 
     const strokeClass = selected
       ? themeStyles.stroke
       : 'stroke-zinc-300 dark:stroke-zinc-700';
 
-    return (
-      <BaseNode
-        id={id}
-        selected={selected}
-        orientation={data?.orientation}
-        color={nodeColor}
-        minWidth={110}
-        minHeight={46}
-        onDoubleClick={() => setIsEditing(true)}
-      >
-        <div className="relative w-full h-full min-w-[110px] min-h-[46px] flex items-center justify-center px-3 py-1.5 drop-shadow-sm transition-all">
-          {/* Responsive Vector 3D Cylinder Background */}
-          <svg
-            className="absolute inset-0 w-full h-full overflow-visible pointer-events-none"
-            viewBox="0 0 100 60"
-            preserveAspectRatio="none"
-          >
-            {/* Cylinder Body */}
-            <path
-              d="M 2,14 L 2,46 C 2,54 98,54 98,46 L 98,14 Z"
-              className={`${themeStyles.bodyBg} ${strokeClass} transition-colors`}
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
-            {/* Cylinder Top Lid */}
-            <ellipse
-              cx="50"
-              cy="14"
-              rx="48"
-              ry="11"
-              className={`${themeStyles.lidBg} ${strokeClass} transition-colors`}
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
+    const handleSelectColor = useCallback(
+      (newColor: NodeColorTheme) => {
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id === id) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  color: newColor,
+                },
+              };
+            }
+            return node;
+          })
+        );
+      },
+      [id, setNodes]
+    );
 
-          {/* Centered Text Label */}
-          <div className="relative z-10 flex items-center justify-center w-full pt-1.5 px-2">
-            <EditableLabel
-              id={id}
-              initialLabel={data?.label}
-              defaultLabel={defaultLabel}
-              isEditing={isEditing}
-              setIsEditing={setIsEditing}
-              className="text-zinc-800 dark:text-zinc-100 text-center font-medium truncate text-sm"
-              inputClassName="text-center w-full font-medium text-sm"
-            />
+    const handleUpdateDetails = useCallback(
+      ({
+        label: newLabel,
+        badge: newBadge,
+        description: newDescription,
+      }: {
+        label?: string;
+        badge?: string;
+        description?: string;
+      }) => {
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id === id) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  label: newLabel || defaultLabel,
+                  badge: newBadge,
+                  description: newDescription,
+                  sublabel: newDescription,
+                },
+              };
+            }
+            return node;
+          })
+        );
+      },
+      [id, defaultLabel, setNodes]
+    );
+
+    return (
+      <>
+        <BaseNode
+          id={id}
+          selected={selected}
+          orientation={data?.orientation}
+          color={nodeColor}
+          minWidth={115}
+          minHeight={50}
+          onDoubleClick={() => setIsEditing(true)}
+        >
+          <div className="relative w-full h-full min-w-[115px] min-h-[50px] flex items-center justify-center px-3 py-1.5 drop-shadow-sm transition-all">
+            {/* Responsive Vector 3D Cylinder Background */}
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none"
+              viewBox="0 0 100 60"
+              preserveAspectRatio="none"
+            >
+              {/* Cylinder Body */}
+              <path
+                d="M 2,14 L 2,46 C 2,54 98,54 98,46 L 98,14 Z"
+                className={`${themeStyles.bodyBg} ${strokeClass} transition-colors`}
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+              {/* Cylinder Top Lid */}
+              <ellipse
+                cx="50"
+                cy="14"
+                rx="48"
+                ry="11"
+                className={`${themeStyles.lidBg} ${strokeClass} transition-colors`}
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+
+            {/* Content Container (Title, Badge, Description) */}
+            <div className="relative z-10 flex flex-col items-center justify-center w-full pt-2 px-1 text-center">
+              {/* Title */}
+              <EditableLabel
+                id={id}
+                initialLabel={data?.label}
+                defaultLabel={defaultLabel}
+                isEditing={isEditing}
+                setIsEditing={setIsEditing}
+                className="text-zinc-800 dark:text-zinc-100 font-semibold truncate text-xs sm:text-sm text-center w-full"
+                inputClassName="text-center w-full font-semibold text-xs sm:text-sm"
+              />
+
+              {/* Badge on a new line below Title */}
+              {data?.badge && (
+                <div className="mt-0.5">
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsModalOpen(true);
+                    }}
+                    className={`inline-block text-[9px] leading-tight px-1.5 py-0.5 rounded-full font-semibold border ${badgeStyles} truncate max-w-[100px] cursor-pointer hover:opacity-85 shadow-2xs`}
+                    title={`Badge: ${data.badge} (Click to edit)`}
+                  >
+                    {data.badge}
+                  </span>
+                </div>
+              )}
+
+              {/* Optional Description / Subtitle */}
+              {(data?.description || data?.sublabel) && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsModalOpen(true);
+                  }}
+                  className="text-[10px] text-zinc-500 dark:text-zinc-400 font-normal leading-tight truncate max-w-[160px] mt-0.5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300"
+                  title={data.description || data.sublabel}
+                >
+                  {data.description || data.sublabel}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </BaseNode>
+        </BaseNode>
+
+        {/* Details & Color Customization Modal */}
+        <IconPickerModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSelectIcon={() => {}}
+          currentIconName="Database"
+          currentColor={nodeColor}
+          onSelectColor={handleSelectColor}
+          currentLabel={data?.label || defaultLabel}
+          currentBadge={data?.badge || ''}
+          currentDescription={data?.description || data?.sublabel || ''}
+          onUpdateDetails={handleUpdateDetails}
+        />
+      </>
     );
   };
 
